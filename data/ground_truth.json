@@ -1,0 +1,742 @@
+[
+  {
+    "plik": "faktura_01.pdf",
+    "numer": "FV/2026/10/001",
+    "sprzedawca": "Green Energy OZE sp. z o.o.",
+    "nip_sprzedawcy": "9083863799",
+    "nabywca": "Firma Budowlana Dom-Styl",
+    "nip_nabywcy": "0265423512",
+    "data_wystawienia": "2026-10-04",
+    "termin_platnosci": "2026-10-11",
+    "pozycje": [
+      {
+        "nazwa": "Drożdże piekarskie świeże, 1 kg",
+        "ilosc": 4,
+        "cena_netto": 12.5,
+        "wartosc_netto": 50.0
+      },
+      {
+        "nazwa": "Mąka pszenna typ 500, 25 kg",
+        "ilosc": 4,
+        "cena_netto": 89.99,
+        "wartosc_netto": 359.96
+      },
+      {
+        "nazwa": "Cegła ceramiczna poryzowana, szt.",
+        "ilosc": 3,
+        "cena_netto": 3.2,
+        "wartosc_netto": 9.6
+      },
+      {
+        "nazwa": "Zestaw kluczy nasadowych 1/2 cala",
+        "ilosc": 12,
+        "cena_netto": 189.0,
+        "wartosc_netto": 2268.0
+      }
+    ],
+    "netto": 2687.56,
+    "vat": 618.14,
+    "brutto": 3305.7,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_02.pdf",
+    "numer": "FV/2026/10/002",
+    "sprzedawca": "Trans-Logistyka Polska sp. z o.o.",
+    "nip_sprzedawcy": "8161849590",
+    "nabywca": "Salon Fryzjerski Blondynka",
+    "nip_nabywcy": "1034131649",
+    "data_wystawienia": "2026-10-02",
+    "termin_platnosci": "2026-10-16",
+    "pozycje": [
+      {
+        "nazwa": "Drożdże piekarskie świeże, 1 kg",
+        "ilosc": 10,
+        "cena_netto": 12.5,
+        "wartosc_netto": 125.0
+      },
+      {
+        "nazwa": "Papier ksero A4, 500 arkuszy",
+        "ilosc": 5,
+        "cena_netto": 24.9,
+        "wartosc_netto": 124.5
+      },
+      {
+        "nazwa": "Mrożonki warzywne mix, 1 kg",
+        "ilosc": 13,
+        "cena_netto": 7.3,
+        "wartosc_netto": 94.9
+      }
+    ],
+    "netto": 344.4,
+    "vat": 79.21,
+    "brutto": 423.61,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_03.pdf",
+    "numer": "FV/2026/10/003",
+    "sprzedawca": "Opon-Pol Hurtownia Opon sp. z o.o.",
+    "nip_sprzedawcy": "9283276486",
+    "nabywca": "Salon Fryzjerski Blondynka",
+    "nip_nabywcy": "5030564135",
+    "data_wystawienia": "2026-10-23",
+    "termin_platnosci": "2026-11-13",
+    "pozycje": [
+      {
+        "nazwa": "Mrożonki warzywne mix, 1 kg",
+        "ilosc": 6,
+        "cena_netto": 7.3,
+        "wartosc_netto": 43.8
+      },
+      {
+        "nazwa": "Papier ksero A4, 500 arkuszy",
+        "ilosc": 4,
+        "cena_netto": 24.9,
+        "wartosc_netto": 99.6
+      },
+      {
+        "nazwa": "Opona zimowa 205/55 R16",
+        "ilosc": 11,
+        "cena_netto": 320.0,
+        "wartosc_netto": 3520.0
+      },
+      {
+        "nazwa": "Ser mozzarella tarta, 1 kg",
+        "ilosc": 5,
+        "cena_netto": 22.1,
+        "wartosc_netto": 110.5
+      }
+    ],
+    "netto": 3773.9,
+    "vat": 868.0,
+    "brutto": 4641.9,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_04.pdf",
+    "numer": "FV/2026/10/004",
+    "sprzedawca": "Chem-Bud Materiały Budowlane sp. z o.o.",
+    "nip_sprzedawcy": "4238849692",
+    "nabywca": "Gabinet Stomatologiczny Biały Ząb",
+    "nip_nabywcy": "2691669786",
+    "data_wystawienia": "2026-10-15",
+    "termin_platnosci": "2026-10-29",
+    "pozycje": [
+      {
+        "nazwa": "Papier ksero A4, 500 arkuszy",
+        "ilosc": 7,
+        "cena_netto": 24.9,
+        "wartosc_netto": 174.3
+      },
+      {
+        "nazwa": "Diesel B7, 1 l",
+        "ilosc": 15,
+        "cena_netto": 5.89,
+        "wartosc_netto": 88.35
+      },
+      {
+        "nazwa": "Energia elektryczna, 1 kWh",
+        "ilosc": 15,
+        "cena_netto": 0.95,
+        "wartosc_netto": 14.25
+      },
+      {
+        "nazwa": "Kawa ziarnista 1 kg",
+        "ilosc": 11,
+        "cena_netto": 68.0,
+        "wartosc_netto": 748.0
+      }
+    ],
+    "netto": 1024.9,
+    "vat": 235.73,
+    "brutto": 1260.63,
+    "defekty": [
+      "obrocony"
+    ],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_05.pdf",
+    "numer": "FV/2026/10/005",
+    "sprzedawca": "Opon-Pol Hurtownia Opon sp. z o.o.",
+    "nip_sprzedawcy": "4627048288",
+    "nabywca": "Warsztat Samochodowy u Zbyszka",
+    "nip_nabywcy": "4893252889",
+    "data_wystawienia": "2026-10-11",
+    "termin_platnosci": "2026-10-18",
+    "pozycje": [
+      {
+        "nazwa": "Cegła ceramiczna poryzowana, szt.",
+        "ilosc": 13,
+        "cena_netto": 3.2,
+        "wartosc_netto": 41.6
+      },
+      {
+        "nazwa": "Drożdże piekarskie świeże, 1 kg",
+        "ilosc": 5,
+        "cena_netto": 12.5,
+        "wartosc_netto": 62.5
+      },
+      {
+        "nazwa": "Energia elektryczna, 1 kWh",
+        "ilosc": 13,
+        "cena_netto": 0.95,
+        "wartosc_netto": 12.35
+      },
+      {
+        "nazwa": "Abonament Microsoft 365, 1 mies.",
+        "ilosc": 11,
+        "cena_netto": 23.8,
+        "wartosc_netto": 261.8
+      }
+    ],
+    "netto": 378.25,
+    "vat": 87.0,
+    "brutto": 465.25,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_06.pdf",
+    "numer": "FV/2026/10/006",
+    "sprzedawca": "Fresh Food Distribution sp. z o.o.",
+    "nip_sprzedawcy": "3039117187",
+    "nabywca": "Kancelaria Radcy Prawnego Kowalski",
+    "nip_nabywcy": "2782489630",
+    "data_wystawienia": "2026-10-26",
+    "termin_platnosci": "2026-11-16",
+    "pozycje": [
+      {
+        "nazwa": "Papier ksero A4, 500 arkuszy",
+        "ilosc": 15,
+        "cena_netto": 24.9,
+        "wartosc_netto": 373.5
+      },
+      {
+        "nazwa": "Kawa ziarnista 1 kg",
+        "ilosc": 6,
+        "cena_netto": 68.0,
+        "wartosc_netto": 408.0
+      },
+      {
+        "nazwa": "Mąka pszenna typ 500, 25 kg",
+        "ilosc": 15,
+        "cena_netto": 89.99,
+        "wartosc_netto": 1349.85
+      },
+      {
+        "nazwa": "Drożdże piekarskie świeże, 1 kg",
+        "ilosc": 14,
+        "cena_netto": 12.5,
+        "wartosc_netto": 175.0
+      }
+    ],
+    "netto": 2306.35,
+    "vat": 530.46,
+    "brutto": 2836.81,
+    "defekty": [
+      "skan_slaba_jakosc"
+    ],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_07.pdf",
+    "numer": "FV/2026/10/007",
+    "sprzedawca": "Trans-Logistyka Polska sp. z o.o.",
+    "nip_sprzedawcy": "1331509838",
+    "nabywca": "Pracownia Graficzna Pixel",
+    "nip_nabywcy": "3010310519",
+    "data_wystawienia": "2026-10-17",
+    "termin_platnosci": "2026-11-07",
+    "pozycje": [
+      {
+        "nazwa": "Diesel B7, 1 l",
+        "ilosc": 11,
+        "cena_netto": 5.89,
+        "wartosc_netto": 64.79
+      },
+      {
+        "nazwa": "Cegła ceramiczna poryzowana, szt.",
+        "ilosc": 11,
+        "cena_netto": 3.2,
+        "wartosc_netto": 35.2
+      },
+      {
+        "nazwa": "Zestaw kluczy nasadowych 1/2 cala",
+        "ilosc": 6,
+        "cena_netto": 189.0,
+        "wartosc_netto": 1134.0
+      },
+      {
+        "nazwa": "Toner do drukarki laserowej",
+        "ilosc": 8,
+        "cena_netto": 149.0,
+        "wartosc_netto": 1192.0
+      }
+    ],
+    "netto": 2425.99,
+    "vat": 557.98,
+    "brutto": 2983.97,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_08.pdf",
+    "numer": "FV/2026/10/008",
+    "sprzedawca": "Chem-Bud Materiały Budowlane sp. z o.o.",
+    "nip_sprzedawcy": "9973763117",
+    "nabywca": "Gabinet Stomatologiczny Biały Ząb",
+    "nip_nabywcy": "5667010654",
+    "data_wystawienia": "2026-10-18",
+    "termin_platnosci": "2026-10-25",
+    "pozycje": [
+      {
+        "nazwa": "Zestaw kluczy nasadowych 1/2 cala",
+        "ilosc": 8,
+        "cena_netto": 189.0,
+        "wartosc_netto": 1512.0
+      },
+      {
+        "nazwa": "Energia elektryczna, 1 kWh",
+        "ilosc": 4,
+        "cena_netto": 0.95,
+        "wartosc_netto": 3.8
+      }
+    ],
+    "netto": 1515.8,
+    "vat": 348.63,
+    "brutto": 1864.43,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_09.pdf",
+    "numer": "FV/2026/10/009",
+    "sprzedawca": "Papier i Biuro Hurtownia sp. z o.o.",
+    "nip_sprzedawcy": "8013267732",
+    "nabywca": "Gabinet Stomatologiczny Biały Ząb",
+    "nip_nabywcy": "0260647460",
+    "data_wystawienia": "2026-10-05",
+    "termin_platnosci": "2026-10-26",
+    "pozycje": [
+      {
+        "nazwa": "Diesel B7, 1 l",
+        "ilosc": 9,
+        "cena_netto": 5.89,
+        "wartosc_netto": 53.01
+      },
+      {
+        "nazwa": "Ser mozzarella tarta, 1 kg",
+        "ilosc": 8,
+        "cena_netto": 22.1,
+        "wartosc_netto": 176.8
+      }
+    ],
+    "netto": 229.81,
+    "vat": 52.86,
+    "brutto": 282.67,
+    "defekty": [
+      "obrocony"
+    ],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_10.pdf",
+    "numer": "FV/2026/10/010",
+    "sprzedawca": "Green Energy OZE sp. z o.o.",
+    "nip_sprzedawcy": "0500978826",
+    "nabywca": "Piekarnia Słodka Bułka",
+    "nip_nabywcy": "8121913614",
+    "data_wystawienia": "2026-10-19",
+    "termin_platnosci": "2026-11-09",
+    "pozycje": [
+      {
+        "nazwa": "Diesel B7, 1 l",
+        "ilosc": 4,
+        "cena_netto": 5.89,
+        "wartosc_netto": 23.56
+      },
+      {
+        "nazwa": "Zestaw kluczy nasadowych 1/2 cala",
+        "ilosc": 1,
+        "cena_netto": 189.0,
+        "wartosc_netto": 189.0
+      }
+    ],
+    "netto": 212.56,
+    "vat": 48.89,
+    "brutto": 261.45,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_11.pdf",
+    "numer": "FV/2026/10/011",
+    "sprzedawca": "Papier i Biuro Hurtownia sp. z o.o.",
+    "nip_sprzedawcy": "9985435347",
+    "nabywca": "Gabinet Stomatologiczny Biały Ząb",
+    "nip_nabywcy": "2475107994",
+    "data_wystawienia": "2026-10-03",
+    "termin_platnosci": "2026-09-29",
+    "pozycje": [
+      {
+        "nazwa": "Usługa sprzątania pomieszczeń, 1 godz.",
+        "ilosc": 1,
+        "cena_netto": 45.0,
+        "wartosc_netto": 45.0
+      },
+      {
+        "nazwa": "Ser mozzarella tarta, 1 kg",
+        "ilosc": 10,
+        "cena_netto": 22.1,
+        "wartosc_netto": 221.0
+      }
+    ],
+    "netto": 266.0,
+    "vat": 61.18,
+    "brutto": 327.18,
+    "defekty": [
+      "termin_przed_wystawieniem"
+    ],
+    "oczekiwana_walidacja": "blad: termin platnosci przed data wystawienia"
+  },
+  {
+    "plik": "faktura_12.pdf",
+    "numer": "FV/2026/10/012",
+    "sprzedawca": "Pol-Serwis Autoryzowany Serwis sp. z o.o.",
+    "nip_sprzedawcy": "4278498081",
+    "nabywca": "Firma Budowlana Dom-Styl",
+    "nip_nabywcy": "1241182440",
+    "data_wystawienia": "2026-10-08",
+    "termin_platnosci": "2026-10-29",
+    "pozycje": [
+      {
+        "nazwa": "Diesel B7, 1 l",
+        "ilosc": 15,
+        "cena_netto": 5.89,
+        "wartosc_netto": 88.35
+      },
+      {
+        "nazwa": "Abonament Microsoft 365, 1 mies.",
+        "ilosc": 6,
+        "cena_netto": 23.8,
+        "wartosc_netto": 142.8
+      },
+      {
+        "nazwa": "Zestaw kluczy nasadowych 1/2 cala",
+        "ilosc": 15,
+        "cena_netto": 189.0,
+        "wartosc_netto": 2835.0
+      },
+      {
+        "nazwa": "Opona zimowa 205/55 R16",
+        "ilosc": 2,
+        "cena_netto": 320.0,
+        "wartosc_netto": 640.0
+      }
+    ],
+    "netto": 3706.15,
+    "vat": 852.41,
+    "brutto": 4558.56,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_13.pdf",
+    "numer": "FV/2026/10/013",
+    "sprzedawca": "Fresh Food Distribution sp. z o.o.",
+    "nip_sprzedawcy": "8740164004",
+    "nabywca": "Pizza Napoletana sp. z o.o.",
+    "nip_nabywcy": "2427868011",
+    "data_wystawienia": "2026-10-21",
+    "termin_platnosci": "2026-10-28",
+    "pozycje": [
+      {
+        "nazwa": "Cegła ceramiczna poryzowana, szt.",
+        "ilosc": 4,
+        "cena_netto": 3.2,
+        "wartosc_netto": 12.8
+      },
+      {
+        "nazwa": "Papier ksero A4, 500 arkuszy",
+        "ilosc": 11,
+        "cena_netto": 24.9,
+        "wartosc_netto": 273.9
+      }
+    ],
+    "netto": 286.7,
+    "vat": 65.94,
+    "brutto": 352.64,
+    "defekty": [
+      "skan_slaba_jakosc"
+    ],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_14.pdf",
+    "numer": "FV/2026/10/014",
+    "sprzedawca": "Papier i Biuro Hurtownia sp. z o.o.",
+    "nip_sprzedawcy": "2045053310",
+    "nabywca": "Pizza Napoletana sp. z o.o.",
+    "nip_nabywcy": "2563421603",
+    "data_wystawienia": "2026-10-05",
+    "termin_platnosci": "2026-10-19",
+    "pozycje": [
+      {
+        "nazwa": "Ser mozzarella tarta, 1 kg",
+        "ilosc": 14,
+        "cena_netto": 22.1,
+        "wartosc_netto": 309.4
+      },
+      {
+        "nazwa": "Opona zimowa 205/55 R16",
+        "ilosc": 6,
+        "cena_netto": 320.0,
+        "wartosc_netto": 1920.0
+      },
+      {
+        "nazwa": "Abonament Microsoft 365, 1 mies.",
+        "ilosc": 10,
+        "cena_netto": 23.8,
+        "wartosc_netto": 238.0
+      },
+      {
+        "nazwa": "Mąka pszenna typ 500, 25 kg",
+        "ilosc": 9,
+        "cena_netto": 89.99,
+        "wartosc_netto": 809.91
+      }
+    ],
+    "netto": 3277.31,
+    "vat": 753.78,
+    "brutto": 4031.09,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_15.pdf",
+    "numer": "FV/2026/10/015",
+    "sprzedawca": "Fresh Food Distribution sp. z o.o.",
+    "nip_sprzedawcy": "9401965564",
+    "nabywca": "Pracownia Graficzna Pixel",
+    "nip_nabywcy": "8169340609",
+    "data_wystawienia": "2026-10-12",
+    "termin_platnosci": "2026-11-02",
+    "pozycje": [
+      {
+        "nazwa": "Diesel B7, 1 l",
+        "ilosc": 15,
+        "cena_netto": 5.89,
+        "wartosc_netto": 88.35
+      },
+      {
+        "nazwa": "Mrożonki warzywne mix, 1 kg",
+        "ilosc": 8,
+        "cena_netto": 7.3,
+        "wartosc_netto": 58.4
+      }
+    ],
+    "netto": 146.75,
+    "vat": 33.75,
+    "brutto": 180.5,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_16.pdf",
+    "numer": "FV/2026/10/016",
+    "sprzedawca": "Pol-Serwis Autoryzowany Serwis sp. z o.o.",
+    "nip_sprzedawcy": null,
+    "nabywca": "Firma Budowlana Dom-Styl",
+    "nip_nabywcy": "8236629942",
+    "data_wystawienia": "2026-10-03",
+    "termin_platnosci": "2026-10-17",
+    "pozycje": [
+      {
+        "nazwa": "Energia elektryczna, 1 kWh",
+        "ilosc": 11,
+        "cena_netto": 0.95,
+        "wartosc_netto": 10.45
+      },
+      {
+        "nazwa": "Cegła ceramiczna poryzowana, szt.",
+        "ilosc": 4,
+        "cena_netto": 3.2,
+        "wartosc_netto": 12.8
+      },
+      {
+        "nazwa": "Mrożonki warzywne mix, 1 kg",
+        "ilosc": 6,
+        "cena_netto": 7.3,
+        "wartosc_netto": 43.8
+      },
+      {
+        "nazwa": "Zestaw pędzli malarskich",
+        "ilosc": 7,
+        "cena_netto": 35.0,
+        "wartosc_netto": 245.0
+      }
+    ],
+    "netto": 312.05,
+    "vat": 71.77,
+    "brutto": 383.82,
+    "defekty": [
+      "brak_nip_sprzedawcy"
+    ],
+    "oczekiwana_walidacja": "blad: brak NIP sprzedawcy"
+  },
+  {
+    "plik": "faktura_17.pdf",
+    "numer": "FV/2026/10/017",
+    "sprzedawca": "Pol-Serwis Autoryzowany Serwis sp. z o.o.",
+    "nip_sprzedawcy": "7773872148",
+    "nabywca": "Autokomis Auto-Centrum",
+    "nip_nabywcy": "9513433200",
+    "data_wystawienia": "2026-10-20",
+    "termin_platnosci": "2026-10-27",
+    "pozycje": [
+      {
+        "nazwa": "Mrożonki warzywne mix, 1 kg",
+        "ilosc": 4,
+        "cena_netto": 7.3,
+        "wartosc_netto": 29.2
+      },
+      {
+        "nazwa": "Mąka pszenna typ 500, 25 kg",
+        "ilosc": 7,
+        "cena_netto": 89.99,
+        "wartosc_netto": 629.93
+      },
+      {
+        "nazwa": "Zestaw kluczy nasadowych 1/2 cala",
+        "ilosc": 13,
+        "cena_netto": 189.0,
+        "wartosc_netto": 2457.0
+      },
+      {
+        "nazwa": "Zestaw pędzli malarskich",
+        "ilosc": 10,
+        "cena_netto": 35.0,
+        "wartosc_netto": 350.0
+      }
+    ],
+    "netto": 3466.13,
+    "vat": 797.21,
+    "brutto": 4263.34,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_18.pdf",
+    "numer": "FV/2026/10/018",
+    "sprzedawca": "Trans-Logistyka Polska sp. z o.o.",
+    "nip_sprzedawcy": "1632870836",
+    "nabywca": "Warsztat Samochodowy u Zbyszka",
+    "nip_nabywcy": "8687277439",
+    "data_wystawienia": "2026-10-03",
+    "termin_platnosci": "2026-10-24",
+    "pozycje": [
+      {
+        "nazwa": "Kawa ziarnista 1 kg",
+        "ilosc": 14,
+        "cena_netto": 68.0,
+        "wartosc_netto": 952.0
+      },
+      {
+        "nazwa": "Usługa sprzątania pomieszczeń, 1 godz.",
+        "ilosc": 13,
+        "cena_netto": 45.0,
+        "wartosc_netto": 585.0
+      }
+    ],
+    "netto": 1537.0,
+    "vat": 353.51,
+    "brutto": 1910.76,
+    "defekty": [
+      "kwoty_niezgodne"
+    ],
+    "oczekiwana_walidacja": "blad: netto + VAT != brutto"
+  },
+  {
+    "plik": "faktura_19.pdf",
+    "numer": "FV/2026/10/019",
+    "sprzedawca": "Fresh Food Distribution sp. z o.o.",
+    "nip_sprzedawcy": "5581223625",
+    "nabywca": "Salon Fryzjerski Blondynka",
+    "nip_nabywcy": "1665876034",
+    "data_wystawienia": "2026-10-08",
+    "termin_platnosci": "2026-10-22",
+    "pozycje": [
+      {
+        "nazwa": "Kawa ziarnista 1 kg",
+        "ilosc": 8,
+        "cena_netto": 68.0,
+        "wartosc_netto": 544.0
+      },
+      {
+        "nazwa": "Energia elektryczna, 1 kWh",
+        "ilosc": 2,
+        "cena_netto": 0.95,
+        "wartosc_netto": 1.9
+      },
+      {
+        "nazwa": "Diesel B7, 1 l",
+        "ilosc": 12,
+        "cena_netto": 5.89,
+        "wartosc_netto": 70.68
+      },
+      {
+        "nazwa": "Zestaw kluczy nasadowych 1/2 cala",
+        "ilosc": 5,
+        "cena_netto": 189.0,
+        "wartosc_netto": 945.0
+      }
+    ],
+    "netto": 1561.58,
+    "vat": 359.16,
+    "brutto": 1920.74,
+    "defekty": [],
+    "oczekiwana_walidacja": "ok"
+  },
+  {
+    "plik": "faktura_20.pdf",
+    "numer": "FV/2026/10/020",
+    "sprzedawca": "Stalmax Konstrukcje Stalowe sp. z o.o.",
+    "nip_sprzedawcy": "6705466889",
+    "nabywca": "Pracownia Graficzna Pixel",
+    "nip_nabywcy": "3734670651",
+    "data_wystawienia": "2026-10-25",
+    "termin_platnosci": "2026-11-15",
+    "pozycje": [
+      {
+        "nazwa": "Ser mozzarella tarta, 1 kg",
+        "ilosc": 12,
+        "cena_netto": 22.1,
+        "wartosc_netto": 265.2
+      },
+      {
+        "nazwa": "Zestaw pędzli malarskich",
+        "ilosc": 1,
+        "cena_netto": 35.0,
+        "wartosc_netto": 35.0
+      },
+      {
+        "nazwa": "Usługa sprzątania pomieszczeń, 1 godz.",
+        "ilosc": 14,
+        "cena_netto": 45.0,
+        "wartosc_netto": 630.0
+      }
+    ],
+    "netto": 930.2,
+    "vat": 213.95,
+    "brutto": 1186.5,
+    "defekty": [
+      "kwoty_niezgodne"
+    ],
+    "oczekiwana_walidacja": "blad: netto + VAT != brutto"
+  }
+]
