@@ -1,0 +1,316 @@
+[
+  {
+    "plik": "faktura_01.pdf",
+    "numer": "FV/2026/10/001",
+    "nip_sprzedawcy": "9083863799",
+    "data_wystawienia": "2026-10-04",
+    "termin_platnosci": "2026-10-11",
+    "netto": 2687.56,
+    "vat": 618.14,
+    "brutto": 3305.7,
+    "wartosci_netto_pozycji": [
+      50.0,
+      359.96,
+      9.6,
+      2268.0
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_02.pdf",
+    "numer": "FV/2026/10/002",
+    "nip_sprzedawcy": "8161849590",
+    "data_wystawienia": "2026-10-02",
+    "termin_platnosci": "2026-10-16",
+    "netto": 344.4,
+    "vat": 79.21,
+    "brutto": 423.61,
+    "wartosci_netto_pozycji": [
+      125.0,
+      124.5,
+      94.9
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_03.pdf",
+    "numer": "FV/2026/10/003",
+    "nip_sprzedawcy": "9283276486",
+    "data_wystawienia": "2026-10-23",
+    "termin_platnosci": "2026-11-13",
+    "netto": 3773.9,
+    "vat": 868.0,
+    "brutto": 4641.9,
+    "wartosci_netto_pozycji": [
+      43.8,
+      99.6,
+      3520.0,
+      110.5
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_04.pdf",
+    "numer": "FV/2026/10/004",
+    "nip_sprzedawcy": "4238849692",
+    "data_wystawienia": "2026-10-15",
+    "termin_platnosci": "2026-10-29",
+    "netto": 1024.9,
+    "vat": 235.73,
+    "brutto": 1260.63,
+    "wartosci_netto_pozycji": [
+      174.3,
+      88.35,
+      14.25,
+      748.0
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_05.pdf",
+    "numer": "FV/2026/10/005",
+    "nip_sprzedawcy": "4627048288",
+    "data_wystawienia": "2026-10-11",
+    "termin_platnosci": "2026-10-18",
+    "netto": 378.25,
+    "vat": 87.0,
+    "brutto": 465.25,
+    "wartosci_netto_pozycji": [
+      41.6,
+      62.5,
+      12.35,
+      261.8
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_06.pdf",
+    "numer": "FV/2026/10/006",
+    "nip_sprzedawcy": "3039117187",
+    "data_wystawienia": "2026-10-26",
+    "termin_platnosci": "2026-11-16",
+    "netto": 2306.35,
+    "vat": 530.46,
+    "brutto": 2836.81,
+    "wartosci_netto_pozycji": [
+      373.5,
+      408.0,
+      1349.85,
+      175.0
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_07.pdf",
+    "numer": "FV/2026/10/007",
+    "nip_sprzedawcy": "1331509838",
+    "data_wystawienia": "2026-10-17",
+    "termin_platnosci": "2026-11-07",
+    "netto": 2425.99,
+    "vat": 557.98,
+    "brutto": 2983.97,
+    "wartosci_netto_pozycji": [
+      64.79,
+      35.2,
+      1134.0,
+      1192.0
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_08.pdf",
+    "numer": "FV/2026/10/008",
+    "nip_sprzedawcy": "9973763117",
+    "data_wystawienia": "2026-10-18",
+    "termin_platnosci": "2026-10-25",
+    "netto": 1515.8,
+    "vat": 348.63,
+    "brutto": 1864.43,
+    "wartosci_netto_pozycji": [
+      1512.0,
+      3.8
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_09.pdf",
+    "numer": "FV/2026/10/009",
+    "nip_sprzedawcy": "8013267732",
+    "data_wystawienia": "2026-10-05",
+    "termin_platnosci": "2026-10-26",
+    "netto": 229.81,
+    "vat": 52.86,
+    "brutto": 282.67,
+    "wartosci_netto_pozycji": [
+      53.01,
+      176.8
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_10.pdf",
+    "numer": "FV/2026/10/010",
+    "nip_sprzedawcy": "0500978826",
+    "data_wystawienia": "2026-10-19",
+    "termin_platnosci": "2026-11-09",
+    "netto": 212.56,
+    "vat": 48.89,
+    "brutto": 261.45,
+    "wartosci_netto_pozycji": [
+      23.56,
+      189.0
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_11.pdf",
+    "numer": "FV/2026/10/011",
+    "nip_sprzedawcy": "9985435347",
+    "data_wystawienia": "2026-10-03",
+    "termin_platnosci": "2026-09-29",
+    "netto": 266.0,
+    "vat": 61.18,
+    "brutto": 327.18,
+    "wartosci_netto_pozycji": [
+      45.0,
+      221.0
+    ],
+    "bledy": [
+      "termin płatności (2026-09-29) przed datą wystawienia (2026-10-03)"
+    ]
+  },
+  {
+    "plik": "faktura_12.pdf",
+    "numer": "FV/2026/10/012",
+    "nip_sprzedawcy": "4278498081",
+    "data_wystawienia": "2026-10-08",
+    "termin_platnosci": "2026-10-29",
+    "netto": 3706.15,
+    "vat": 852.41,
+    "brutto": 4558.56,
+    "wartosci_netto_pozycji": [
+      88.35,
+      142.8,
+      2835.0,
+      640.0
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_13.pdf",
+    "numer": "FV/2026/10/013",
+    "nip_sprzedawcy": "8740164004",
+    "data_wystawienia": "2026-10-21",
+    "termin_platnosci": "2026-10-28",
+    "netto": 286.7,
+    "vat": 65.94,
+    "brutto": 352.64,
+    "wartosci_netto_pozycji": [
+      12.8,
+      273.9
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_14.pdf",
+    "numer": "FV/2026/10/014",
+    "nip_sprzedawcy": "2045053310",
+    "data_wystawienia": "2026-10-05",
+    "termin_platnosci": "2026-10-19",
+    "netto": 3277.31,
+    "vat": 753.78,
+    "brutto": 4031.09,
+    "wartosci_netto_pozycji": [
+      309.4,
+      1920.0,
+      238.0,
+      809.91
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_15.pdf",
+    "numer": "FV/2026/10/015",
+    "nip_sprzedawcy": "9401965564",
+    "data_wystawienia": "2026-10-12",
+    "termin_platnosci": "2026-11-02",
+    "netto": 146.75,
+    "vat": 33.75,
+    "brutto": 180.5,
+    "wartosci_netto_pozycji": [
+      88.35,
+      58.4
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_16.pdf",
+    "numer": "FV/2026/10/016",
+    "nip_sprzedawcy": null,
+    "data_wystawienia": "2026-10-03",
+    "termin_platnosci": "2026-10-17",
+    "netto": 312.05,
+    "vat": 71.77,
+    "brutto": 383.82,
+    "wartosci_netto_pozycji": [
+      10.45,
+      12.8,
+      43.8,
+      245.0
+    ],
+    "bledy": [
+      "brak NIP sprzedawcy"
+    ]
+  },
+  {
+    "plik": "faktura_17.pdf",
+    "numer": "FV/2026/10/017",
+    "nip_sprzedawcy": "7773872148",
+    "data_wystawienia": "2026-10-20",
+    "termin_platnosci": "2026-10-27",
+    "netto": 3466.13,
+    "vat": 797.21,
+    "brutto": 4263.34,
+    "wartosci_netto_pozycji": [
+      29.2,
+      629.93,
+      2457.0,
+      350.0
+    ],
+    "bledy": []
+  },
+  {
+    "plik": "faktura_18.pdf",
+    "numer": "FV/2026/10/018",
+    "nip_sprzedawcy": "1632870836",
+    "data_wystawienia": "2026-10-03",
+    "termin_platnosci": "2026-10-24",
+    "netto": 1537.0,
+    "vat": 353.51,
+    "brutto": 1910.76,
+    "wartosci_netto_pozycji": [
+      952.0,
+      585.0
+    ],
+    "bledy": [
+      "kwoty niezgodne: netto 1537.00 + VAT 353.51 != brutto 1910.76"
+    ]
+  },
+  {
+    "plik": "faktura_19.pdf",
+    "numer": "FV/2026/10/019",
+    "nip_sprzedawcy": "5581223625",
+    "data_wystawienia": "2026-10-08",
+    "termin_platnosci": "2026-10-22",
+    "netto": 1561.58,
+    "vat": 359.16,
+    "brutto": 1920.74,
+    "wartosci_netto_pozycji": [
+      544.0,
+      1.9,
+      70.68,
+      945.0
+    ],
+    "bledy": []
+  }
+]
