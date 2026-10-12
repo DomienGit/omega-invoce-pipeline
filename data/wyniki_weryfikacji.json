@@ -14,7 +14,8 @@
       9.6,
       2268.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_02.pdf",
@@ -30,7 +31,8 @@
       124.5,
       94.9
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_03.pdf",
@@ -47,7 +49,8 @@
       3520.0,
       110.5
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_04.pdf",
@@ -64,7 +67,8 @@
       14.25,
       748.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_05.pdf",
@@ -81,7 +85,8 @@
       12.35,
       261.8
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_06.pdf",
@@ -98,7 +103,8 @@
       1349.85,
       175.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_07.pdf",
@@ -115,7 +121,8 @@
       1134.0,
       1192.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_08.pdf",
@@ -130,7 +137,8 @@
       1512.0,
       3.8
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_09.pdf",
@@ -145,7 +153,8 @@
       53.01,
       176.8
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_10.pdf",
@@ -160,7 +169,8 @@
       23.56,
       189.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_11.pdf",
@@ -177,7 +187,8 @@
     ],
     "bledy": [
       "termin płatności (2026-09-29) przed datą wystawienia (2026-10-03)"
-    ]
+    ],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_12.pdf",
@@ -194,7 +205,8 @@
       2835.0,
       640.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_13.pdf",
@@ -209,7 +221,8 @@
       12.8,
       273.9
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_14.pdf",
@@ -226,7 +239,8 @@
       238.0,
       809.91
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_15.pdf",
@@ -241,7 +255,8 @@
       88.35,
       58.4
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_16.pdf",
@@ -260,7 +275,8 @@
     ],
     "bledy": [
       "brak NIP sprzedawcy"
-    ]
+    ],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_17.pdf",
@@ -277,7 +293,8 @@
       2457.0,
       350.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_18.pdf",
@@ -294,7 +311,8 @@
     ],
     "bledy": [
       "kwoty niezgodne: netto 1537.00 + VAT 353.51 != brutto 1910.76"
-    ]
+    ],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_19.pdf",
@@ -311,6 +329,26 @@
       70.68,
       945.0
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
+  },
+  {
+    "plik": "faktura_20.pdf",
+    "numer": "FV/2026/10/020",
+    "nip_sprzedawcy": "6705466889",
+    "data_wystawienia": "2026-10-25",
+    "termin_platnosci": "2026-11-15",
+    "netto": 930.2,
+    "vat": 213.95,
+    "brutto": 1186.5,
+    "wartosci_netto_pozycji": [
+      265.2,
+      35.0,
+      630.0
+    ],
+    "bledy": [
+      "kwoty niezgodne: netto 930.20 + VAT 213.95 != brutto 1186.50"
+    ],
+    "poprawnosc_danych_procent": 100.0
   }
 ]
