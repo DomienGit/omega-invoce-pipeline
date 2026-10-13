@@ -13,15 +13,19 @@ Pipeline dla każdego pliku data/faktura_*.pdf:
        d) suma wartości netto pozycji == "Razem netto" faktury,
        e) termin płatności nie jest wcześniejszy niż data wystawienia.
        Dodatkowo między fakturami: żaden numer faktury nie powtarza się.
-  4. RAPORT        — wiersz na fakturę + podsumowanie (w tym suma netto)
+  4. ZAPIS DO BAZY — SQLite data/faktury.db (moduł baza.py): tabela
+     faktury (nagłówki, kwoty, błędy, status) + pozycje. Ponowny zapis
+     tej samej faktury zastępuje wpis; status 'zatwierdzone' chroniony.
+  5. RAPORT        — wiersz na fakturę + podsumowanie (w tym suma netto)
      + JSON z wynikami.
-  5. PORÓWNANIE    — jeśli istnieje data/ground_truth.json: trafność
+  6. PORÓWNANIE    — jeśli istnieje data/ground_truth.json: trafność
      wyekstrahowanych danych w % (pole po polu) + zapis raportu do
      data/raport_dokladnosci.json.
 
 Wznawianie: wyniki zapisywane są po KAŻDEJ fakturze do
 data/wyniki_weryfikacji.json. Przy ponownym uruchomieniu faktury już
 obecne w tym pliku są pomijane (przydatne przy limitach API lub przerwaniu).
+Wyniki ze starego schematu (bez pozycji) są przeliczane od nowa.
 
 Uruchomienie:  python weryfikator.py
 Zależności:    google-genai, pymupdf, python-dotenv
@@ -39,21 +43,26 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+import baza
+
 MODEL = "gemini-3.7-flash"
 DPI = 150                   # rozdzielczość renderowania PDF -> PNG
 TOLERANCJA_KWOT = 0.01      # zł — grosze mogą się różnić zaokrągleniem
 PRZERWA = 4                 # s między zapytaniami — free tier ma limit RPM
 MAX_PROB = 5                # próby przy chwilowych problemach API (429/500/503)
+WAGI_NIP = (6, 5, 7, 2, 3, 4, 5, 6, 7)  # wagi sumy kontrolnej NIP (9 cyfr)
 
 PROMPT = """Przeanalizuj obraz faktury VAT i zwróć z niej dane.
 
 Zasady:
+- nazwa_sprzedawcy / nazwa_nabywcy: pełne nazwy sprzedawcy i nabywcy.
 - nip_sprzedawcy: NIP podany przy SPRZEDAWCY (nie przy nabywcy!),
   same cyfry bez spacji i myślników. null, jeśli sprzedawca nie ma NIP-u.
+- nip_nabywcy: NIP podany przy NABYWCY, same cyfry. null, jeśli brak.
 - Daty w formacie RRRR-MM-DD.
 - Kwoty jako liczby w złotych, bez symbolu waluty.
-- wartosci_netto_pozycji: wartości netto ("Wartość netto") kolejnych
-  pozycji z tabeli na fakturze, w tej samej kolejności.
+- pozycje: kolejne wiersze tabeli na fakturze jako obiekty
+  {nazwa, ilosc, cena_netto, wartosc_netto}, w tej samej kolejności.
 - Dokument może być obrócony o 90/270 stopni albo słabej jakości —
   mimo to odczytaj dane dokładnie.
 
@@ -65,20 +74,32 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "numer": {"type": "string"},
+        "nazwa_sprzedawcy": {"type": "string", "nullable": True},
         "nip_sprzedawcy": {"type": "string", "nullable": True},
+        "nazwa_nabywcy": {"type": "string", "nullable": True},
+        "nip_nabywcy": {"type": "string", "nullable": True},
         "data_wystawienia": {"type": "string"},
         "termin_platnosci": {"type": "string"},
         "netto": {"type": "number"},
         "vat": {"type": "number"},
         "brutto": {"type": "number"},
-        "wartosci_netto_pozycji": {
+        "pozycje": {
             "type": "array",
-            "items": {"type": "number"},
+            "items": {
+                "type": "object",
+                "properties": {
+                    "nazwa": {"type": "string"},
+                    "ilosc": {"type": "number"},
+                    "cena_netto": {"type": "number"},
+                    "wartosc_netto": {"type": "number"},
+                },
+                "required": ["nazwa", "ilosc", "cena_netto", "wartosc_netto"],
+            },
         },
     },
-    "required": ["numer", "nip_sprzedawcy", "data_wystawienia",
-                 "termin_platnosci", "netto", "vat", "brutto",
-                 "wartosci_netto_pozycji"],
+    "required": ["numer", "nazwa_sprzedawcy", "nip_sprzedawcy",
+                 "nazwa_nabywcy", "nip_nabywcy", "data_wystawienia",
+                 "termin_platnosci", "netto", "vat", "brutto", "pozycje"],
 }
 
 
@@ -126,12 +147,14 @@ def waliduj(f: dict) -> list[str]:
     """Zwraca listę błędów faktury. Pusta lista = faktura poprawna."""
     bledy = []
 
-    # --- a) i b) NIP sprzedawcy: obecność i długość -------------------------
-    nip = (f.get("nip_sprzedawcy") or "").replace(" ", "").replace("-", "")
+    # --- a) i b) NIP sprzedawcy: obecność, długość, suma kontrolna ----------
+    nip = baza.normalizuj_nip(f.get("nip_sprzedawcy"))
     if not nip:
         bledy.append("brak NIP sprzedawcy")
     elif len(nip) != 10 or not nip.isdigit():
         bledy.append(f"NIP sprzedawcy nie składa się z 10 cyfr: '{nip}'")
+    elif sum(int(c) * w for c, w in zip(nip, WAGI_NIP)) % 11 != int(nip[9]):
+        bledy.append(f"NIP sprzedawcy nie przechodzi sumy kontrolnej: '{nip}'")
 
     # --- c) netto + VAT == brutto -------------------------------------------
     netto, vat, brutto = f.get("netto"), f.get("vat"), f.get("brutto")
@@ -142,14 +165,19 @@ def waliduj(f: dict) -> list[str]:
                      f"!= brutto {brutto:.2f}")
 
     # --- d) suma wartości netto pozycji == "Razem netto" --------------------
-    pozycje = f.get("wartosci_netto_pozycji") or []
+    pozycje = f.get("pozycje") or []
     if netto is None:
         pass  # brak netto już zgłoszony w punkcie c)
     elif not pozycje:
         bledy.append("nie udało się odczytać pozycji faktury")
-    elif abs(sum(pozycje) - netto) > TOLERANCJA_KWOT:
-        bledy.append(f"suma pozycji netto ({sum(pozycje):.2f}) "
-                     f"!= razem netto ({netto:.2f})")
+    elif not all(isinstance(p.get("wartosc_netto"), (int, float))
+                 for p in pozycje):
+        bledy.append("nie udało się odczytać wartości wszystkich pozycji")
+    else:
+        suma = sum(p["wartosc_netto"] for p in pozycje)
+        if abs(suma - netto) > TOLERANCJA_KWOT:
+            bledy.append(f"suma pozycji netto ({suma:.2f}) "
+                         f"!= razem netto ({netto:.2f})")
 
     # --- e) termin płatności >= data wystawienia ----------------------------
     try:
@@ -226,6 +254,7 @@ def main():
         sys.exit("Błąd: brak GEMINI_API_KEY w pliku .env")
 
     klient = genai.Client(api_key=klucz)
+    con = baza.polacz()
 
     pliki = sorted(p for p in os.listdir("data") if p.endswith(".pdf"))
     if not pliki:
@@ -234,14 +263,13 @@ def main():
     print(f"Weryfikacja {len(pliki)} faktur (model: {MODEL})\n")
 
     # --- wznawianie: wczytaj wyniki poprzedniego przebiegu -------------------
-    # Wyniki bez "wartosci_netto_pozycji" pochodzą ze starego schematu
-    # ekstrakcji — przeliczamy je od nowa (reguła d wymaga pozycji tabeli).
+    # Wyniki bez "pozycje" pochodzą ze starego schematu ekstrakcji —
+    # przeliczamy je od nowa (reguła d wymaga pozycji tabeli).
     sciezka_wyniki = os.path.join("data", "wyniki_weryfikacji.json")
     wyniki = []
     if os.path.exists(sciezka_wyniki):
         with open(sciezka_wyniki, encoding="utf-8") as plik:
-            wyniki = [w for w in json.load(plik)
-                      if "wartosci_netto_pozycji" in w]
+            wyniki = [w for w in json.load(plik) if "pozycje" in w]
     zrobione = {w["plik"] for w in wyniki}
 
     for nazwa in pliki:
@@ -258,6 +286,7 @@ def main():
         print(f"  {dane.get('numer', '?'):20} -> {status}")
         wyniki.append({"plik": nazwa, **dane, "bledy": bledy})
         zapisz_wyniki(sciezka_wyniki, wyniki)  # zapis po każdej fakturze
+        baza.zapisz_fakture(con, wyniki[-1])
         time.sleep(PRZERWA)
 
     # --- duplikaty: ten sam numer faktury w dwóch plikach --------------------
@@ -272,6 +301,12 @@ def main():
         else:
             widziane[numer] = w["plik"]
     zapisz_wyniki(sciezka_wyniki, wyniki)
+
+    # --- zapis do bazy: całość po checku duplikatów (statusy są finalne) ----
+    # Zapisujemy wszystkie wyniki, także wczytane z wznowienia — dzięki
+    # temu baza dogania JSON po przerwaniu albo skasowaniu faktury.db.
+    for w in wyniki:
+        baza.zapisz_fakture(con, w)
 
     # --- porównanie z ground truth ---------------------------------------------
     raport = porownaj_z_ground_truth(wyniki)
@@ -296,6 +331,9 @@ def main():
         print(f"  {w['plik']}: {'; '.join(w['bledy'])}")
     print(f"Suma netto wszystkich faktur: {suma_netto:.2f} zł")
     print(f"Szczegółowe wyniki: {sciezka_wyniki}")
+    print(f"Baza faktur:        {baza.SCIEZKA_BAZY}")
+
+    baza.zamknij(con)
 
 
 if __name__ == "__main__":
