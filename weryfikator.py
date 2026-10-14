@@ -45,7 +45,7 @@ from google.genai import types
 
 import baza
 
-MODEL = "gemini-3.7-flash"
+MODEL = "gemini-3.1-flash-lite"
 DPI = 150                   # rozdzielczość renderowania PDF -> PNG
 TOLERANCJA_KWOT = 0.01      # zł — grosze mogą się różnić zaokrągleniem
 PRZERWA = 4                 # s między zapytaniami — free tier ma limit RPM

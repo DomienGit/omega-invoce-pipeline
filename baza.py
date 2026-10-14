@@ -5,8 +5,9 @@ Tabele (dokładnie wg notatki "Baza danych faktur"):
              netto/VAT/brutto, błędy walidacji (JSON), status workflow.
              UNIQUE (numer, nip_sprzedawcy) — wykrywanie duplikatów
              (sama detekcja zostaje w weryfikatorze, na wynikach).
-  pozycje  — po jednym wierszu na pozycję faktury: id, faktura_id
-             (klucz obcy, ON DELETE CASCADE) i status.
+  pozycje  — wiersze tabeli faktury: nazwa, ilosc, cena_netto,
+             wartosc_netto (to, co wyciąga model w weryfikatorze)
+             + status. Klucz obcy do faktury (ON DELETE CASCADE).
 
 Zapis jest idempotentny: ponowny zapis tej samej faktury (ten sam
 numer + NIP sprzedawcy) zastępuje poprzedni wpis i jego pozycje,
@@ -46,9 +47,13 @@ CREATE TABLE IF NOT EXISTS faktury (
 );
 
 CREATE TABLE IF NOT EXISTS pozycje (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    faktura_id INTEGER NOT NULL REFERENCES faktury(id) ON DELETE CASCADE,
-    status     TEXT NOT NULL CHECK (status IN ({STATUSY}))
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    faktura_id    INTEGER NOT NULL REFERENCES faktury(id) ON DELETE CASCADE,
+    nazwa         TEXT,
+    ilosc         REAL,
+    cena_netto    REAL,
+    wartosc_netto REAL,
+    status        TEXT NOT NULL CHECK (status IN ({STATUSY}))
 );
 """
 
@@ -118,6 +123,9 @@ def zapisz_fakture(con: sqlite3.Connection, rekord: dict) -> None:
         )
         faktura_id = cur.lastrowid  # zwykły INSERT — lastrowid jest wiarygodny
         con.executemany(
-            "INSERT INTO pozycje (faktura_id, status) VALUES (?, ?)",
-            [(faktura_id, status)] * len(rekord.get("pozycje") or []),
+            "INSERT INTO pozycje (faktura_id, nazwa, ilosc, cena_netto, "
+            "wartosc_netto, status) VALUES (?, ?, ?, ?, ?, ?)",
+            [(faktura_id, p.get("nazwa"), p.get("ilosc"), p.get("cena_netto"),
+              p.get("wartosc_netto"), status)
+             for p in (rekord.get("pozycje") or [])],
         )
