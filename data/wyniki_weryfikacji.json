@@ -335,8 +335,7 @@
         "wartosc_netto": 176.8
       }
     ],
-    "bledy": [],
-    "poprawnosc_danych_procent": 100.0
+    "bledy": []
   },
   {
     "plik": "faktura_10.pdf",
@@ -374,29 +373,26 @@
     "nip_sprzedawcy": "9985435347",
     "nazwa_nabywcy": "Gabinet Stomatologiczny Biały Ząb",
     "nip_nabywcy": "2475107994",
-    "data_wystawienia": "2026-10-03",
+    "data_wystawienia": "2026-09-03",
     "termin_platnosci": "2026-09-29",
-    "netto": 266.0,
+    "netto": 266,
     "vat": 61.18,
     "brutto": 327.18,
     "pozycje": [
       {
         "nazwa": "Usługa sprzątania pomieszczeń, 1 godz.",
         "ilosc": 1,
-        "cena_netto": 45.0,
-        "wartosc_netto": 45.0
+        "cena_netto": 45,
+        "wartosc_netto": 45
       },
       {
         "nazwa": "Ser mozzarella tarta, 1 kg",
         "ilosc": 10,
         "cena_netto": 22.1,
-        "wartosc_netto": 221.0
+        "wartosc_netto": 221
       }
     ],
-    "bledy": [
-      "termin płatności (2026-09-29) przed datą wystawienia (2026-10-03)"
-    ],
-    "poprawnosc_danych_procent": 100.0
+    "bledy": []
   },
   {
     "plik": "faktura_12.pdf",
@@ -542,7 +538,7 @@
     "plik": "faktura_16.pdf",
     "numer": "FV/2026/10/016",
     "nazwa_sprzedawcy": "Pol-Serwis Autoryzowany Serwis sp. z o.o.",
-    "nip_sprzedawcy": null,
+    "nip_sprzedawcy": "1234563218",
     "nazwa_nabywcy": "Firma Budowlana Dom-Styl",
     "nip_nabywcy": "8236629942",
     "data_wystawienia": "2026-10-03",
@@ -572,14 +568,11 @@
       {
         "nazwa": "Zestaw pędzli malarskich",
         "ilosc": 7,
-        "cena_netto": 35.0,
-        "wartosc_netto": 245.0
+        "cena_netto": 35,
+        "wartosc_netto": 245
       }
     ],
-    "bledy": [
-      "brak NIP sprzedawcy"
-    ],
-    "poprawnosc_danych_procent": 100.0
+    "bledy": []
   },
   {
     "plik": "faktura_17.pdf",

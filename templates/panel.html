@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<!-- Panel dla księgowej, serwowany przez panel.py (Flask).
+     Dane pobierane z /api/faktury; akcje (zatwierdzenie, poprawki,
+     eksport) wołają API i odświeżają widok. PDF-y serwowane
+     przez /pdf/<plik>. -->
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel faktur — Omega</title>
+<style>
+  :root {
+    --tlo: #f4f5f7; --karta: #fff; --linia: #dde1e6;
+    --tekst: #1f2328; --szary: #6b7280;
+    --ok: #1a7f37; --ok-tlo: #e6f4ea;
+    --info: #1d4ed8; --info-tlo: #e8effd;
+    --blad: #b42318; --blad-tlo: #fdecea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--tlo); color: var(--tekst);
+    font: 14px/1.45 system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--szary); }
+  header { margin-bottom: 16px; }
+
+  nav { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  nav button {
+    border: 1px solid var(--linia); background: var(--karta); color: var(--tekst);
+    border-radius: 20px; padding: 6px 14px; font-size: 14px; cursor: pointer;
+  }
+  nav button span { color: var(--szary); margin-left: 6px; }
+  nav button.aktywna { background: var(--tekst); color: #fff; border-color: var(--tekst); }
+  nav button.aktywna span { color: #c9d1d9; }
+
+  .karta { background: var(--karta); border: 1px solid var(--linia);
+           border-radius: 10px; overflow: hidden; }
+  main { display: flex; flex-direction: column; gap: 16px; }
+
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--linia); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+       color: var(--szary); background: #fafbfc; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #f6f8fa; }
+  tbody tr.wybrana { background: #eef4ff; }
+  td.kwota, th.kwota { text-align: right; white-space: nowrap; }
+  td.bledy { color: var(--blad); font-size: 12.5px; max-width: 340px; }
+
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px;
+           font-size: 12px; white-space: nowrap; }
+  .badge.ok   { background: var(--ok-tlo);   color: var(--ok); }
+  .badge.info { background: var(--info-tlo); color: var(--info); }
+  .badge.blad { background: var(--blad-tlo); color: var(--blad); }
+
+  #szczegoly { display: grid; grid-template-columns: minmax(340px, 5fr) minmax(400px, 6fr);
+               gap: 16px; }
+  @media (max-width: 980px) { #szczegoly { grid-template-columns: 1fr; } }
+  .kolumna { background: var(--karta); border: 1px solid var(--linia);
+             border-radius: 10px; padding: 16px; }
+  .kolumna h2 { margin: 0 0 12px; font-size: 16px; display: flex;
+               align-items: center; gap: 10px; flex-wrap: wrap; }
+  .kolumna h2 .zamknij {
+    margin-left: auto; border: none; background: none; color: var(--szary);
+    font-size: 18px; cursor: pointer; line-height: 1;
+  }
+
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px;
+       margin: 0 0 14px; }
+  dt { color: var(--szary); }
+  dd { margin: 0; font-weight: 500; word-break: break-word; }
+
+  .kolumna h3 { margin: 14px 0 6px; font-size: 13px; color: var(--szary);
+                text-transform: uppercase; letter-spacing: .04em; }
+  .kolumna table { border-radius: 6px; }
+  .kolumna td, .kolumna th { padding: 6px 10px; }
+  tr.suma td { font-weight: 600; background: #fafbfc; }
+
+  ul.bledy { margin: 0; padding-left: 18px; color: var(--blad); }
+  .brak-pdf { color: var(--szary); font-style: italic; padding: 32px 0;
+              text-align: center; }
+  embed { width: 100%; height: 640px; border: 1px solid var(--linia);
+          border-radius: 6px; }
+  .pdf-link { display: inline-block; margin-top: 8px; font-size: 13px; }
+
+  .btn { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--linia);
+         background: var(--karta); color: var(--tekst); font-size: 14px;
+         cursor: pointer; }
+  .btn:hover { background: #f6f8fa; }
+  .btn.primary { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .btn.primary:hover { background: #166c2e; }
+  .btn:disabled { background: #c9d1d9; border-color: #c9d1d9; color: #fff;
+                  cursor: not-allowed; }
+  .przyciski { display: flex; gap: 8px; margin: 0 0 14px; flex-wrap: wrap; }
+
+  .pasek-eksportu { display: flex; align-items: center; gap: 12px;
+                    padding: 12px 16px; border-bottom: 1px solid var(--linia);
+                    background: #fafbfc; flex-wrap: wrap; }
+  .pasek-eksportu span { font-size: 13.5px; }
+
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px;
+          color: var(--szary); }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fill,
+               minmax(200px, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
+  input {
+    border: 1px solid var(--linia); border-radius: 6px; padding: 6px 8px;
+    font: inherit; color: var(--tekst); width: 100%; background: #fff;
+  }
+  input:focus { outline: 2px solid var(--info-tlo); border-color: var(--info); }
+  .edycja-pozycji input { padding: 4px 6px; }
+  .edycja-pozycji td { padding: 4px 6px; }
+  .btn.usun { padding: 2px 9px; color: var(--blad); font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Panel faktur — Omega</h1>
+  <p id="naglowek"></p>
+</header>
+
+<nav id="zakladki"></nav>
+
+<main>
+  <div class="karta" id="tabela"></div>
+  <section id="szczegoly" hidden></section>
+</main>
+
+<script>
+"use strict";
+let DANE = null;
+let aktywnyFiltr = "wszystkie";
+let wybranyPlik = null;
+let trybEdycji = false;
+let pozycjaZatwierdzenia = null;  // do "Następna" po zatwierdzeniu
+
+const STATUSY = {
+  zatwierdzone:     { etykieta: "zatwierdzona",     klasa: "ok" },
+  do_zatwierdzenia: { etykieta: "do zatwierdzenia", klasa: "info" },
+  do_weryfikacji:   { etykieta: "do weryfikacji",   klasa: "blad" },
+};
+
+// NULL-tolerancja: brak danych (np. NIP w fakturze 016) pokazujemy jako "—"
+const val = (x) => (x === null || x === undefined || x === "" ? "—" : x);
+const kwota = (x) => (typeof x === "number" ? x.toFixed(2) : "—");
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[c]));
+const liczba = (v) => (v === "" || v === null ? null : Number(v));
+
+function pasuje(f, filtr) {
+  if (filtr === "wszystkie") return true;
+  if (filtr === "do_zatwierdzenia") return f.status === "do_zatwierdzenia";
+  if (filtr === "bledy") return f.bledy.length > 0;
+  if (filtr === "zatwierdzone") return f.status === "zatwierdzone";
+  return false;
+}
+
+function badge(status) {
+  const s = STATUSY[status] || { etykieta: status, klasa: "blad" };
+  return `<span class="badge ${s.klasa}">${s.etykieta}</span>`;
+}
+
+async function odswiez() {
+  const odp = await fetch("/api/faktury");
+  DANE = await odp.json();
+  trybEdycji = false;
+  if (wybranyPlik !== null &&
+      !DANE.faktury.some((f) => f.plik === wybranyPlik)) {
+    wybranyPlik = null;
+  }
+  renderNaglowek();
+  renderZakladki();
+  renderTabela();
+  renderSzczegoly();
+}
+
+function renderNaglowek() {
+  const ile = (pred) => DANE.faktury.filter(pred).length;
+  const kiedy = new Date(DANE.stanNa).toLocaleString("pl-PL");
+  document.getElementById("naglowek").textContent =
+    `${DANE.faktury.length} faktur · ${ile((f) => f.status === "do_zatwierdzenia")} ` +
+    `do zatwierdzenia · ${ile((f) => f.bledy.length > 0)} z błędami · ` +
+    `${ile((f) => f.status === "zatwierdzone")} zatwierdzonych — stan na ${kiedy}`;
+}
+
+function renderZakladki() {
+  const licznik = (filtr) => DANE.faktury.filter((f) => pasuje(f, filtr)).length;
+  const zakladki = [
+    ["wszystkie", "Wszystkie"],
+    ["do_zatwierdzenia", "Do zatwierdzenia"],
+    ["bledy", "Błędy"],
+    ["zatwierdzone", "Zatwierdzone"],
+  ];
+  document.getElementById("zakladki").innerHTML = zakladki
+    .map(([id, etykieta]) =>
+      `<button data-filtr="${id}" class="${id === aktywnyFiltr ? "aktywna" : ""}">
+         ${etykieta}<span>${licznik(id)}</span></button>`)
+    .join("");
+  document.querySelectorAll("#zakladki button").forEach((przycisk) => {
+    przycisk.onclick = () => {
+      aktywnyFiltr = przycisk.dataset.filtr;
+      renderZakladki();
+      renderTabela();
+    };
+  });
+}
+
+function renderTabela() {
+  const wiersze = DANE.faktury.filter((f) => pasuje(f, aktywnyFiltr));
+  const pasek = aktywnyFiltr === "zatwierdzone" ? `
+    <div class="pasek-eksportu">
+      <button class="btn primary" id="btn-eksport">Eksportuj do XML</button>
+      <span id="wynik-eksportu"></span>
+    </div>` : "";
+
+  const tbody = wiersze.map((f) => `
+    <tr data-plik="${esc(f.plik)}" class="${f.plik === wybranyPlik ? "wybrana" : ""}">
+      <td>${val(f.numer)}</td>
+      <td>${val(f.nazwa_sprzedawcy)}<br>
+          <small style="color:var(--szary)">NIP: ${val(f.nip_sprzedawcy)}</small></td>
+      <td>${val(f.data_wystawienia)}</td>
+      <td>${val(f.termin_platnosci)}</td>
+      <td class="kwota">${kwota(f.netto)}</td>
+      <td class="kwota">${kwota(f.vat)}</td>
+      <td class="kwota">${kwota(f.brutto)}</td>
+      <td style="text-align:center">${f.liczba_pozycji}</td>
+      <td>${badge(f.status)}</td>
+      <td class="bledy">${f.bledy.map(esc).join("<br>")}</td>
+    </tr>`).join("");
+
+  document.getElementById("tabela").innerHTML = wiersze ? `
+    ${pasek}
+    <table>
+      <thead><tr>
+        <th>Numer</th><th>Sprzedawca</th><th>Data wystawienia</th>
+        <th>Termin płatności</th><th class="kwota">Netto</th>
+        <th class="kwota">VAT</th><th class="kwota">Brutto</th>
+        <th style="text-align:center">Pozycje</th><th>Status</th><th>Błędy</th>
+      </tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>` : `${pasek}
+    <p style="padding:20px;color:var(--szary)">Brak faktur w tej zakładce.</p>`;
+
+  const btnEksport = document.getElementById("btn-eksport");
+  if (btnEksport) btnEksport.onclick = eksportuj;
+
+  document.querySelectorAll("#tabela tbody tr").forEach((wiersz) => {
+    wiersz.onclick = () => {
+      wybranyPlik = wiersz.dataset.plik;
+      trybEdycji = false;
+      renderTabela();
+      renderSzczegoly();
+    };
+  });
+}
+
+// --- akcje ----------------------------------------------------------------
+
+async function zatwierdz(f) {
+  const odp = await fetch(`/api/faktury/${f.id}/zatwierdz`, { method: "POST" });
+  const w = await odp.json();
+  if (!odp.ok) { alert(w.blad || "nie udało się zatwierdzić"); return; }
+  // zapamiętaj pozycję w bieżącej zakładce: po odświeżeniu faktura
+  // zniknie z listy, a "Następna" ma wskazać tę, która weszła na jej
+  // miejsce:
+  const lista = DANE.faktury.filter((x) => pasuje(x, aktywnyFiltr));
+  pozycjaZatwierdzenia = lista.findIndex((x) => x.plik === f.plik);
+  await odswiez();
+}
+
+function nastepnaFaktura() {
+  const lista = DANE.faktury.filter((f) => pasuje(f, aktywnyFiltr));
+  if (!lista.length) return null;
+  let i = lista.findIndex((f) => f.plik === wybranyPlik);
+  if (i === -1) {
+    // np. właśnie zatwierdzona — jej nie ma już na liście zakładki:
+    i = Math.min(pozycjaZatwierdzenia ?? 0, lista.length - 1);
+  }
+  return i < lista.length - 1 ? lista[i + 1] : null;
+}
+
+async function zapiszPoprawki(f) {
+  const sekcja = document.getElementById("szczegoly");
+  const naglowek = {};
+  sekcja.querySelectorAll(".form-grid input").forEach((inp) => {
+    naglowek[inp.name] = inp.value.trim() || null;
+  });
+  ["netto", "vat", "brutto"].forEach((k) => {
+    if (naglowek[k] !== null) naglowek[k] = Number(naglowek[k]);
+  });
+  const pozycje = [...sekcja.querySelectorAll("#pozycje-edycja tbody tr")].map((tr) => ({
+    nazwa: tr.querySelector('[name="nazwa"]').value.trim() || null,
+    ilosc: liczba(tr.querySelector('[name="ilosc"]').value),
+    cena_netto: liczba(tr.querySelector('[name="cena_netto"]').value),
+    wartosc_netto: liczba(tr.querySelector('[name="wartosc_netto"]').value),
+  }));
+
+  const odp = await fetch(`/api/faktury/${f.id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...naglowek, pozycje }),
+  });
+  const w = await odp.json();
+  if (!odp.ok) { alert(w.blad || "nie udało się zapisać poprawek"); return; }
+  await odswiez();  // podgląd z nowymi błędami/statusem
+}
+
+async function eksportuj() {
+  const odp = await fetch("/api/eksport", { method: "POST" });
+  const w = await odp.json();
+  const miejsce = document.getElementById("wynik-eksportu");
+  if (!odp.ok) {
+    miejsce.textContent = w.blad || "eksport nieudany";
+    return;
+  }
+  miejsce.innerHTML =
+    `Wyeksportowano ${w.liczba} faktur + ${w.pdfy} PDF-ów do ` +
+    `${esc(w.folder)}/ — <a href="/eksport">pobierz ${esc(w.plik)}</a>`;
+}
+
+// --- szczegóły ------------------------------------------------------------
+
+const POLA_NAGLOWKA = [
+  ["numer", "Numer faktury", "text"],
+  ["nazwa_sprzedawcy", "Sprzedawca", "text"],
+  ["nip_sprzedawcy", "NIP sprzedawcy", "text"],
+  ["nazwa_nabywcy", "Nabywca", "text"],
+  ["nip_nabywcy", "NIP nabywcy", "text"],
+  ["data_wystawienia", "Data wystawienia", "date"],
+  ["termin_platnosci", "Termin płatności", "date"],
+  ["netto", "Netto (zł)", "number"],
+  ["vat", "VAT (zł)", "number"],
+  ["brutto", "Brutto (zł)", "number"],
+];
+
+function renderSzczegoly() {
+  const sekcja = document.getElementById("szczegoly");
+  const f = DANE.faktury.find((x) => x.plik === wybranyPlik);
+  if (!f) { sekcja.hidden = true; sekcja.innerHTML = ""; return; }
+  sekcja.hidden = false;
+  if (trybEdycji) renderFormularz(f); else renderPodglad(f);
+}
+
+function renderPodglad(f) {
+  const sekcja = document.getElementById("szczegoly");
+  const suma = f.pozycje.reduce((s, p) => s + (p.wartosc_netto || 0), 0);
+  const pozycje = f.pozycje.map((p) => `
+    <tr>
+      <td>${val(p.nazwa)}</td>
+      <td class="kwota">${val(p.ilosc)}</td>
+      <td class="kwota">${kwota(p.cena_netto)}</td>
+      <td class="kwota">${kwota(p.wartosc_netto)}</td>
+    </tr>`).join("");
+
+  const bledy = f.bledy.length
+    ? `<h3>Błędy walidacji</h3><ul class="bledy">` +
+      f.bledy.map((b) => `<li>${esc(b)}</li>`).join("") + `</ul>`
+    : "";
+
+  const pdfUrl = f.plik ? "/pdf/" + encodeURIComponent(f.plik) : null;
+  const pdf = pdfUrl
+    ? `<embed src="${pdfUrl}" type="application/pdf">
+       <a class="pdf-link" href="${pdfUrl}" target="_blank" rel="noopener">
+         Otwórz ${esc(f.plik)} w nowej karcie</a>`
+    : `<p class="brak-pdf">Brak pliku PDF dla tej faktury.</p>`;
+
+  const zatwierdzPrzycisk = f.status !== "zatwierdzone"
+    ? `<button class="btn primary" id="btn-zatwierdz"
+         ${f.bledy.length ? "disabled title='Najpierw popraw błędy walidacji'" : ""}>
+         Zatwierdz</button>`
+    : "";
+  const nastepna = nastepnaFaktura();
+  const nastepnaPrzycisk = `
+    <button class="btn" id="btn-nastepna" ${nastepna ? ""
+      : "disabled title='To ostatnia faktura w tej zakładce'"}>
+      Następna →</button>`;
+
+  sekcja.innerHTML = `
+    <div class="kolumna">
+      <h2>${val(f.numer)} ${badge(f.status)}
+          <button class="zamknij" title="Zamknij szczegóły">×</button></h2>
+      <div class="przyciski">
+        ${zatwierdzPrzycisk}
+        <button class="btn" id="btn-popraw">Popraw dane</button>
+        ${nastepnaPrzycisk}
+      </div>
+      <dl>
+        <dt>Plik</dt><dd>${val(f.plik)}</dd>
+        <dt>Sprzedawca</dt><dd>${val(f.nazwa_sprzedawcy)}</dd>
+        <dt>NIP sprzedawcy</dt><dd>${val(f.nip_sprzedawcy)}</dd>
+        <dt>Nabywca</dt><dd>${val(f.nazwa_nabywcy)}</dd>
+        <dt>NIP nabywcy</dt><dd>${val(f.nip_nabywcy)}</dd>
+        <dt>Data wystawienia</dt><dd>${val(f.data_wystawienia)}</dd>
+        <dt>Termin płatności</dt><dd>${val(f.termin_platnosci)}</dd>
+        <dt>Netto / VAT / Brutto</dt>
+        <dd>${kwota(f.netto)} / ${kwota(f.vat)} / ${kwota(f.brutto)} zł</dd>
+      </dl>
+      <h3>Pozycje (${f.pozycje.length})</h3>
+      <table>
+        <thead><tr><th>Nazwa</th><th class="kwota">Ilość</th>
+          <th class="kwota">Cena netto</th><th class="kwota">Wartość netto</th></tr></thead>
+        <tbody>${pozycje}
+          <tr class="suma"><td>Suma</td><td></td><td></td>
+            <td class="kwota">${kwota(suma)}</td></tr>
+        </tbody>
+      </table>
+      ${bledy}
+    </div>
+    <div class="kolumna">
+      <h2>Oryginalny dokument</h2>
+      ${pdf}
+    </div>`;
+
+  sekcja.querySelector(".zamknij").onclick = () => {
+    wybranyPlik = null;
+    renderTabela();
+    renderSzczegoly();
+  };
+  const btnZatwierdz = document.getElementById("btn-zatwierdz");
+  if (btnZatwierdz) btnZatwierdz.onclick = () => zatwierdz(f);
+  document.getElementById("btn-popraw").onclick = () => {
+    trybEdycji = true;
+    renderSzczegoly();
+  };
+  document.getElementById("btn-nastepna").onclick = () => {
+    const nastepna = nastepnaFaktura();
+    if (!nastepna) return;
+    wybranyPlik = nastepna.plik;
+    trybEdycji = false;
+    renderTabela();
+    renderSzczegoly();
+    document.getElementById("szczegoly")
+      .scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+}
+
+function renderFormularz(f) {
+  const sekcja = document.getElementById("szczegoly");
+
+  const pola = POLA_NAGLOWKA.map(([k, etykieta, typ]) => `
+    <label>${etykieta}
+      <input type="${typ}" ${typ === "number" ? 'step="0.01"' : ""}
+             name="${k}" value="${esc(f[k] ?? "")}">
+    </label>`).join("");
+
+  const wiersze = f.pozycje.map((p) => `
+    <tr>
+      <td><input name="nazwa" value="${esc(p.nazwa ?? "")}"></td>
+      <td><input type="number" step="any" name="ilosc" value="${p.ilosc ?? ""}"></td>
+      <td><input type="number" step="0.01" name="cena_netto" value="${p.cena_netto ?? ""}"></td>
+      <td><input type="number" step="0.01" name="wartosc_netto" value="${p.wartosc_netto ?? ""}"></td>
+      <td><button class="btn usun" title="Usuń pozycję">×</button></td>
+    </tr>`).join("");
+
+  sekcja.innerHTML = `
+    <div class="kolumna">
+      <h2>Poprawianie: ${val(f.numer)} ${badge(f.status)}
+          <button class="zamknij" title="Zamknij szczegóły">×</button></h2>
+      <div class="przyciski">
+        <button class="btn primary" id="btn-zapisz">Zapisz zmiany</button>
+        <button class="btn" id="btn-anuluj">Anuluj</button>
+      </div>
+      <div class="form-grid">${pola}</div>
+      <h3>Pozycje</h3>
+      <table class="edycja-pozycji" id="pozycje-edycja">
+        <thead><tr><th>Nazwa</th><th class="kwota">Ilość</th>
+          <th class="kwota">Cena netto</th><th class="kwota">Wartość netto</th>
+          <th></th></tr></thead>
+        <tbody>${wiersze}</tbody>
+      </table>
+      <p style="margin:8px 0 0"><button class="btn" id="btn-dodaj-pozycje">
+        + Dodaj pozycję</button></p>
+      <p style="color:var(--szary);font-size:12.5px;margin-top:10px">
+        Po zapisie walidacja liczy się od nowa (NIP, kwoty, suma pozycji,
+        daty) — dopóki są błędy, faktury nie da się zatwierdzić.</p>
+    </div>
+    <div class="kolumna">
+      <h2>Oryginalny dokument</h2>
+      ${f.plik
+        ? `<embed src="/pdf/${encodeURIComponent(f.plik)}" type="application/pdf">
+           <a class="pdf-link" href="/pdf/${encodeURIComponent(f.plik)}"
+              target="_blank" rel="noopener">Otwórz ${esc(f.plik)} w nowej karcie</a>`
+        : `<p class="brak-pdf">Brak pliku PDF dla tej faktury.</p>`}
+    </div>`;
+
+  sekcja.querySelector(".zamknij").onclick = () => {
+    wybranyPlik = null;
+    trybEdycji = false;
+    renderTabela();
+    renderSzczegoly();
+  };
+  document.getElementById("btn-anuluj").onclick = () => {
+    trybEdycji = false;
+    renderSzczegoly();
+  };
+  document.getElementById("btn-zapisz").onclick = () => zapiszPoprawki(f);
+
+  const tabela = document.querySelector("#pozycje-edycja tbody");
+  document.getElementById("btn-dodaj-pozycje").onclick = () => {
+    tabela.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td><input name="nazwa" value=""></td>
+        <td><input type="number" step="any" name="ilosc" value=""></td>
+        <td><input type="number" step="0.01" name="cena_netto" value=""></td>
+        <td><input type="number" step="0.01" name="wartosc_netto" value=""></td>
+        <td><button class="btn usun" title="Usuń pozycję">×</button></td>
+      </tr>`);
+  };
+  tabela.addEventListener("click", (zdarzenie) => {
+    if (zdarzenie.target.classList.contains("usun")) {
+      zdarzenie.target.closest("tr").remove();
+    }
+  });
+}
+
+odswiez();
+</script>
+</body>
+</html>

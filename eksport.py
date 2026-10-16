@@ -4,6 +4,13 @@ Szablon: <Dokumenty> → <Faktura> (Naglowek, Sprzedawca, Nabywca,
 Podsumowanie, Pozycje, Dekretacja, PlikPDF). Docelowo plik trafia do
 importu w Comarch Optima.
 
+Wyniki lądują w folderze przetworzone/:
+  - eksport.xml — faktury o zadanym statusie,
+  - kopie oryginalnych PDF-ów zatwierdzonych faktur, nazwane
+    [data wystawienia]_[numer faktury]_[kontrahent].pdf, gdzie
+    kontrahent = sprzedawca (rejestr zakupu). Znaki niedozwolone
+    w nazwach plików (m.in. '/' z numeru faktury) → '-'.
+
 Ustalenia dla pól, których nie ma na fakturach:
   - DataSprzedazy = DataWystawienia (faktury nie mają osobnej daty sprzedaży),
   - StawkaVAT = round(100 * vat / netto) — liczona z kwot nagłówka,
@@ -15,14 +22,23 @@ Uruchomienie samodzielne:
   python eksport.py [status]     # domyślnie "zatwierdzone"
 """
 
+import os
+import re
+import shutil
 import xml.etree.ElementTree as ET
 from datetime import date
 
 import baza
 
-SCIEZKA_EKSPORTU = "data/eksport.xml"
+FOLDER_PRZETWORZONE = "przetworzone"
+SCIEZKA_EKSPORTU = os.path.join(FOLDER_PRZETWORZONE, "eksport.xml")
 SYSTEM = "OmegaProcessor"
 WERSJA = "1.0"
+
+
+def _bezpieczna_nazwa(tekst: str | None) -> str:
+    """Zamienia znaki niedozwolne w nazwach plików na '-'."""
+    return re.sub(r'[\\/:*?"<>|]+', "-", (tekst or "").strip())
 
 
 def _tekst(rodzic: ET.Element, znacznik: str, wartosc) -> None:
@@ -110,6 +126,7 @@ def eksportuj_xml(con, sciezka: str = SCIEZKA_EKSPORTU, status: str = "zatwierdz
         _tekst(f, "PlikPDF", "")                 # baza nie trzyma nazw plików
 
     ET.indent(korzen, space="  ")
+    os.makedirs(os.path.dirname(sciezka) or ".", exist_ok=True)
     with open(sciezka, "w", encoding="utf-8") as plik:
         plik.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         plik.write(ET.tostring(korzen, encoding="unicode"))
@@ -117,9 +134,35 @@ def eksportuj_xml(con, sciezka: str = SCIEZKA_EKSPORTU, status: str = "zatwierdz
     return len(faktury)
 
 
+def zapisz_pdf_do_przetworzonych(con, folder_zrodlowy: str = "data",
+                                 folder_cel: str = FOLDER_PRZETWORZONE) -> int:
+    """Kopiuje PDF-y zatwierdzonych faktur do folderu przetworzone/.
+
+    Nazwa pliku: [data wystawienia]_[numer]_[kontrahent].pdf
+    (kontrahent = sprzedawca). Zwraca liczbę skopiowanych plików;
+    faktury bez pliku PDF w bazie lub bez pliku na dysku są pomijane.
+    """
+    faktury = con.execute(
+        "SELECT plik, numer, nazwa_sprzedawcy, data_wystawienia "
+        "FROM faktury WHERE status = 'zatwierdzone' AND plik IS NOT NULL"
+    ).fetchall()
+
+    os.makedirs(folder_cel, exist_ok=True)
+    skopiowane = 0
+    for (plik, numer, kontrahent, data) in faktury:
+        zrodlo = os.path.join(folder_zrodlowy, plik)
+        if not os.path.exists(zrodlo):
+            continue
+        nazwa = "_".join(_bezpieczna_nazwa(x) for x in (
+            data or "bez-daty", numer or "bez-numeru",
+            kontrahent or "bez-kontrahenta")).rstrip(".")
+        shutil.copy2(zrodlo, os.path.join(folder_cel, f"{nazwa}.pdf"))
+        skopiowane += 1
+    return skopiowane
+
+
 if __name__ == "__main__":
     import sys
-    import os
 
     if not os.path.exists(baza.SCIEZKA_BAZY):
         sys.exit(f"Błąd: brak bazy {baza.SCIEZKA_BAZY} — uruchom najpierw "
@@ -127,5 +170,8 @@ if __name__ == "__main__":
     status = sys.argv[1] if len(sys.argv) > 1 else "zatwierdzone"
     con = baza.polacz()
     n = eksportuj_xml(con, status=status)
+    pdfy = zapisz_pdf_do_przetworzonych(con) if status == "zatwierdzone" else 0
     baza.zamknij(con)
     print(f"Wyeksportowano {n} faktur (status: {status}) do {SCIEZKA_EKSPORTU}")
+    if pdfy:
+        print(f"Skopiowano {pdfy} PDF-ów do {FOLDER_PRZETWORZONE}/")
