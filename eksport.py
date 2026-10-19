@@ -123,7 +123,7 @@ def eksportuj_xml(con, sciezka: str = SCIEZKA_EKSPORTU, status: str = "zatwierdz
         _tekst(dekretacja, "Kategoria", kategoria)
         _tekst(dekretacja, "RejestrVAT", "Zakup")
 
-        _tekst(f, "PlikPDF", "")                 # baza nie trzyma nazw plików
+        _tekst(f, "PlikPDF", "")           
 
     ET.indent(korzen, space="  ")
     os.makedirs(os.path.dirname(sciezka) or ".", exist_ok=True)
@@ -170,7 +170,12 @@ if __name__ == "__main__":
     status = sys.argv[1] if len(sys.argv) > 1 else "zatwierdzone"
     con = baza.polacz()
     n = eksportuj_xml(con, status=status)
-    pdfy = zapisz_pdf_do_przetworzonych(con) if status == "zatwierdzone" else 0
+    if status == "zatwierdzone":
+        pdfy = zapisz_pdf_do_przetworzonych(con)
+        if n:
+            baza.oznacz_wyeksportowane(con)  # znikną z panelu
+    else:
+        pdfy = 0
     baza.zamknij(con)
     print(f"Wyeksportowano {n} faktur (status: {status}) do {SCIEZKA_EKSPORTU}")
     if pdfy:

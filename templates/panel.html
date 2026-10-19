@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Panel dla księgowej, serwowany przez panel.py (Flask).
-     Dane pobierane z /api/faktury; akcje (zatwierdzenie, poprawki,
-     eksport) wołają API i odświeżają widok. PDF-y serwowane
+     Dane pobierane z /api/faktury; akcje (zatwierdzenie, eksport)
+     wołają API i odświeżają widok. PDF-y serwowane
      przez /pdf/<plik>. -->
 <html lang="pl">
 <head>
@@ -98,19 +98,6 @@
                     padding: 12px 16px; border-bottom: 1px solid var(--linia);
                     background: #fafbfc; flex-wrap: wrap; }
   .pasek-eksportu span { font-size: 13.5px; }
-
-  label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px;
-          color: var(--szary); }
-  .form-grid { display: grid; grid-template-columns: repeat(auto-fill,
-               minmax(200px, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
-  input {
-    border: 1px solid var(--linia); border-radius: 6px; padding: 6px 8px;
-    font: inherit; color: var(--tekst); width: 100%; background: #fff;
-  }
-  input:focus { outline: 2px solid var(--info-tlo); border-color: var(--info); }
-  .edycja-pozycji input { padding: 4px 6px; }
-  .edycja-pozycji td { padding: 4px 6px; }
-  .btn.usun { padding: 2px 9px; color: var(--blad); font-size: 15px; }
 </style>
 </head>
 <body>
@@ -131,7 +118,6 @@
 let DANE = null;
 let aktywnyFiltr = "wszystkie";
 let wybranyPlik = null;
-let trybEdycji = false;
 let pozycjaZatwierdzenia = null;  // do "Następna" po zatwierdzeniu
 
 const STATUSY = {
@@ -146,7 +132,6 @@ const kwota = (x) => (typeof x === "number" ? x.toFixed(2) : "—");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[c]));
-const liczba = (v) => (v === "" || v === null ? null : Number(v));
 
 function pasuje(f, filtr) {
   if (filtr === "wszystkie") return true;
@@ -164,7 +149,6 @@ function badge(status) {
 async function odswiez() {
   const odp = await fetch("/api/faktury");
   DANE = await odp.json();
-  trybEdycji = false;
   if (wybranyPlik !== null &&
       !DANE.faktury.some((f) => f.plik === wybranyPlik)) {
     wybranyPlik = null;
@@ -248,9 +232,10 @@ function renderTabela() {
   document.querySelectorAll("#tabela tbody tr").forEach((wiersz) => {
     wiersz.onclick = () => {
       wybranyPlik = wiersz.dataset.plik;
-      trybEdycji = false;
       renderTabela();
       renderSzczegoly();
+      document.getElementById("szczegoly")
+        .scrollIntoView({ block: "nearest", behavior: "smooth" });
     };
   });
 }
@@ -280,32 +265,6 @@ function nastepnaFaktura() {
   return i < lista.length - 1 ? lista[i + 1] : null;
 }
 
-async function zapiszPoprawki(f) {
-  const sekcja = document.getElementById("szczegoly");
-  const naglowek = {};
-  sekcja.querySelectorAll(".form-grid input").forEach((inp) => {
-    naglowek[inp.name] = inp.value.trim() || null;
-  });
-  ["netto", "vat", "brutto"].forEach((k) => {
-    if (naglowek[k] !== null) naglowek[k] = Number(naglowek[k]);
-  });
-  const pozycje = [...sekcja.querySelectorAll("#pozycje-edycja tbody tr")].map((tr) => ({
-    nazwa: tr.querySelector('[name="nazwa"]').value.trim() || null,
-    ilosc: liczba(tr.querySelector('[name="ilosc"]').value),
-    cena_netto: liczba(tr.querySelector('[name="cena_netto"]').value),
-    wartosc_netto: liczba(tr.querySelector('[name="wartosc_netto"]').value),
-  }));
-
-  const odp = await fetch(`/api/faktury/${f.id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...naglowek, pozycje }),
-  });
-  const w = await odp.json();
-  if (!odp.ok) { alert(w.blad || "nie udało się zapisać poprawek"); return; }
-  await odswiez();  // podgląd z nowymi błędami/statusem
-}
-
 async function eksportuj() {
   const odp = await fetch("/api/eksport", { method: "POST" });
   const w = await odp.json();
@@ -321,25 +280,12 @@ async function eksportuj() {
 
 // --- szczegóły ------------------------------------------------------------
 
-const POLA_NAGLOWKA = [
-  ["numer", "Numer faktury", "text"],
-  ["nazwa_sprzedawcy", "Sprzedawca", "text"],
-  ["nip_sprzedawcy", "NIP sprzedawcy", "text"],
-  ["nazwa_nabywcy", "Nabywca", "text"],
-  ["nip_nabywcy", "NIP nabywcy", "text"],
-  ["data_wystawienia", "Data wystawienia", "date"],
-  ["termin_platnosci", "Termin płatności", "date"],
-  ["netto", "Netto (zł)", "number"],
-  ["vat", "VAT (zł)", "number"],
-  ["brutto", "Brutto (zł)", "number"],
-];
-
 function renderSzczegoly() {
   const sekcja = document.getElementById("szczegoly");
   const f = DANE.faktury.find((x) => x.plik === wybranyPlik);
   if (!f) { sekcja.hidden = true; sekcja.innerHTML = ""; return; }
   sekcja.hidden = false;
-  if (trybEdycji) renderFormularz(f); else renderPodglad(f);
+  renderPodglad(f);
 }
 
 function renderPodglad(f) {
@@ -367,7 +313,7 @@ function renderPodglad(f) {
 
   const zatwierdzPrzycisk = f.status !== "zatwierdzone"
     ? `<button class="btn primary" id="btn-zatwierdz"
-         ${f.bledy.length ? "disabled title='Najpierw popraw błędy walidacji'" : ""}>
+         ${f.bledy.length ? "disabled title='Faktura ma błędy walidacji'" : ""}>
          Zatwierdz</button>`
     : "";
   const nastepna = nastepnaFaktura();
@@ -382,7 +328,6 @@ function renderPodglad(f) {
           <button class="zamknij" title="Zamknij szczegóły">×</button></h2>
       <div class="przyciski">
         ${zatwierdzPrzycisk}
-        <button class="btn" id="btn-popraw">Popraw dane</button>
         ${nastepnaPrzycisk}
       </div>
       <dl>
@@ -419,99 +364,15 @@ function renderPodglad(f) {
   };
   const btnZatwierdz = document.getElementById("btn-zatwierdz");
   if (btnZatwierdz) btnZatwierdz.onclick = () => zatwierdz(f);
-  document.getElementById("btn-popraw").onclick = () => {
-    trybEdycji = true;
-    renderSzczegoly();
-  };
   document.getElementById("btn-nastepna").onclick = () => {
     const nastepna = nastepnaFaktura();
     if (!nastepna) return;
     wybranyPlik = nastepna.plik;
-    trybEdycji = false;
     renderTabela();
     renderSzczegoly();
     document.getElementById("szczegoly")
       .scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
-}
-
-function renderFormularz(f) {
-  const sekcja = document.getElementById("szczegoly");
-
-  const pola = POLA_NAGLOWKA.map(([k, etykieta, typ]) => `
-    <label>${etykieta}
-      <input type="${typ}" ${typ === "number" ? 'step="0.01"' : ""}
-             name="${k}" value="${esc(f[k] ?? "")}">
-    </label>`).join("");
-
-  const wiersze = f.pozycje.map((p) => `
-    <tr>
-      <td><input name="nazwa" value="${esc(p.nazwa ?? "")}"></td>
-      <td><input type="number" step="any" name="ilosc" value="${p.ilosc ?? ""}"></td>
-      <td><input type="number" step="0.01" name="cena_netto" value="${p.cena_netto ?? ""}"></td>
-      <td><input type="number" step="0.01" name="wartosc_netto" value="${p.wartosc_netto ?? ""}"></td>
-      <td><button class="btn usun" title="Usuń pozycję">×</button></td>
-    </tr>`).join("");
-
-  sekcja.innerHTML = `
-    <div class="kolumna">
-      <h2>Poprawianie: ${val(f.numer)} ${badge(f.status)}
-          <button class="zamknij" title="Zamknij szczegóły">×</button></h2>
-      <div class="przyciski">
-        <button class="btn primary" id="btn-zapisz">Zapisz zmiany</button>
-        <button class="btn" id="btn-anuluj">Anuluj</button>
-      </div>
-      <div class="form-grid">${pola}</div>
-      <h3>Pozycje</h3>
-      <table class="edycja-pozycji" id="pozycje-edycja">
-        <thead><tr><th>Nazwa</th><th class="kwota">Ilość</th>
-          <th class="kwota">Cena netto</th><th class="kwota">Wartość netto</th>
-          <th></th></tr></thead>
-        <tbody>${wiersze}</tbody>
-      </table>
-      <p style="margin:8px 0 0"><button class="btn" id="btn-dodaj-pozycje">
-        + Dodaj pozycję</button></p>
-      <p style="color:var(--szary);font-size:12.5px;margin-top:10px">
-        Po zapisie walidacja liczy się od nowa (NIP, kwoty, suma pozycji,
-        daty) — dopóki są błędy, faktury nie da się zatwierdzić.</p>
-    </div>
-    <div class="kolumna">
-      <h2>Oryginalny dokument</h2>
-      ${f.plik
-        ? `<embed src="/pdf/${encodeURIComponent(f.plik)}" type="application/pdf">
-           <a class="pdf-link" href="/pdf/${encodeURIComponent(f.plik)}"
-              target="_blank" rel="noopener">Otwórz ${esc(f.plik)} w nowej karcie</a>`
-        : `<p class="brak-pdf">Brak pliku PDF dla tej faktury.</p>`}
-    </div>`;
-
-  sekcja.querySelector(".zamknij").onclick = () => {
-    wybranyPlik = null;
-    trybEdycji = false;
-    renderTabela();
-    renderSzczegoly();
-  };
-  document.getElementById("btn-anuluj").onclick = () => {
-    trybEdycji = false;
-    renderSzczegoly();
-  };
-  document.getElementById("btn-zapisz").onclick = () => zapiszPoprawki(f);
-
-  const tabela = document.querySelector("#pozycje-edycja tbody");
-  document.getElementById("btn-dodaj-pozycje").onclick = () => {
-    tabela.insertAdjacentHTML("beforeend", `
-      <tr>
-        <td><input name="nazwa" value=""></td>
-        <td><input type="number" step="any" name="ilosc" value=""></td>
-        <td><input type="number" step="0.01" name="cena_netto" value=""></td>
-        <td><input type="number" step="0.01" name="wartosc_netto" value=""></td>
-        <td><button class="btn usun" title="Usuń pozycję">×</button></td>
-      </tr>`);
-  };
-  tabela.addEventListener("click", (zdarzenie) => {
-    if (zdarzenie.target.classList.contains("usun")) {
-      zdarzenie.target.closest("tr").remove();
-    }
-  });
 }
 
 odswiez();

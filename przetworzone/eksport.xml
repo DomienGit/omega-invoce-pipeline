@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Dokumenty dataGeneracji="2026-10-16" system="OmegaProcessor" wersja="1.0">
+<Dokumenty dataGeneracji="2026-10-19" system="OmegaProcessor" wersja="1.0">
   <Faktura>
     <Naglowek>
       <NumerFaktury>FV/2026/10/001</NumerFaktury>
@@ -320,6 +320,62 @@
         <Ilosc>14</Ilosc>
         <Jednostka />
         <WartoscNetto>175.00</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+    </Pozycje>
+    <Dekretacja zrodlo="AI">
+      <Kategoria>Inne</Kategoria>
+      <RejestrVAT>Zakup</RejestrVAT>
+    </Dekretacja>
+    <PlikPDF />
+  </Faktura>
+  <Faktura>
+    <Naglowek>
+      <NumerFaktury>FV/2026/10/007</NumerFaktury>
+      <DataWystawienia>2026-10-17</DataWystawienia>
+      <DataSprzedazy>2026-10-17</DataSprzedazy>
+      <TerminPlatnosci>2026-11-07</TerminPlatnosci>
+    </Naglowek>
+    <Sprzedawca>
+      <NIP>1331509838</NIP>
+      <Nazwa>Trans-Logistyka Polska sp. z o.o.</Nazwa>
+    </Sprzedawca>
+    <Nabywca>
+      <NIP>3010310519</NIP>
+      <Nazwa>Pracownia Graficzna Pixel</Nazwa>
+    </Nabywca>
+    <Podsumowanie waluta="PLN">
+      <Netto>2425.99</Netto>
+      <VAT>557.98</VAT>
+      <Brutto>2983.97</Brutto>
+    </Podsumowanie>
+    <Pozycje>
+      <Pozycja>
+        <Opis>Diesel B7, 1 l</Opis>
+        <Ilosc>11</Ilosc>
+        <Jednostka />
+        <WartoscNetto>64.79</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Cegła ceramiczna poryzowana, szt.</Opis>
+        <Ilosc>11</Ilosc>
+        <Jednostka />
+        <WartoscNetto>35.20</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Zestaw kluczy nasadowych 1/2 cala</Opis>
+        <Ilosc>6</Ilosc>
+        <Jednostka />
+        <WartoscNetto>1134.00</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Toner do drukarki laserowej</Opis>
+        <Ilosc>8</Ilosc>
+        <Jednostka />
+        <WartoscNetto>1192.00</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
     </Pozycje>

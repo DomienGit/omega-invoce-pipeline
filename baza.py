@@ -13,11 +13,13 @@ Tabele (dokładnie wg notatki "Baza danych faktur"):
 
 Zapis jest idempotentny: ponowny zapis tej samej faktury (ten sam
 plik albo ten sam numer + NIP sprzedawcy) zastępuje poprzedni wpis
-i jego pozycje, z jednym wyjątkiem — status 'zatwierdzone' (ludzka
-akceptacja) nie jest nadpisywany przez re-run.
+i jego pozycje, z wyjątkiem statusów 'zatwierdzone' (ludzka
+akceptacja) i 'wyeksportowane' (faktura po eksporcie) — te nie są
+nadpisywane przez re-run.
 
-Migracja: bazy sprzed kolumny `plik` są uzupełniane w polacz() —
-ALTER TABLE + backfill numerów/NIP-ów z data/wyniki_weryfikacji.json.
+Migracje w polacz(): bazy sprzed kolumny `plik` są uzupełniane
+(ALTER TABLE + backfill z data/wyniki_weryfikacji.json), a bazy ze
+starym CHECK-iem statusów (bez 'wyeksportowane') są przebudowywane.
 
 Użycie z weryfikatora / panelu:
   con = baza.polacz()
@@ -34,9 +36,10 @@ import sqlite3
 
 SCIEZKA_BAZY = "data/faktury.db"
 
-STATUSY = ("'do_weryfikacji', 'do_zatwierdzenia', 'zatwierdzone'")
+STATUSY = ("'do_weryfikacji', 'do_zatwierdzenia', 'zatwierdzone', "
+           "'wyeksportowane'")
 
-DDL = f"""
+DDL_FAKTURY = f"""
 CREATE TABLE IF NOT EXISTS faktury (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     plik             TEXT,
@@ -54,7 +57,9 @@ CREATE TABLE IF NOT EXISTS faktury (
     status           TEXT NOT NULL CHECK (status IN ({STATUSY})),
     UNIQUE (numer, nip_sprzedawcy)
 );
+"""
 
+DDL_POZYCJE = f"""
 CREATE TABLE IF NOT EXISTS pozycje (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     faktura_id    INTEGER NOT NULL REFERENCES faktury(id) ON DELETE CASCADE,
@@ -65,6 +70,8 @@ CREATE TABLE IF NOT EXISTS pozycje (
     status        TEXT NOT NULL CHECK (status IN ({STATUSY}))
 );
 """
+
+DDL = DDL_FAKTURY + DDL_POZYCJE
 
 
 def normalizuj_nip(nip: str | None) -> str | None:
@@ -106,13 +113,52 @@ def _migruj_plik(con: sqlite3.Connection) -> None:
             )
 
 
+def _migruj_status(con: sqlite3.Connection) -> None:
+    """Przebudowuje stare tabele, których CHECK nie zna 'wyeksportowane'.
+
+    SQLite nie potrafi zmienić constraintu w miejscu, więc: stare tabele
+    są przemianowane, powstają nowe (aktualny DDL), dane są kopiowane
+    1:1, stare tabele kasowane. Nowe bazy (z aktualnym DDL) — bez zmian.
+    """
+    sql = con.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='faktury'"
+    ).fetchone()
+    if sql is None or "wyeksportowane" in sql[0]:
+        return
+
+    con.execute("PRAGMA foreign_keys = OFF")  # DROP tabel rodzica
+    try:
+        with con:
+            con.execute("ALTER TABLE faktury RENAME TO faktury_stara")
+            con.execute("ALTER TABLE pozycje RENAME TO pozycje_stare")
+            con.execute(DDL_FAKTURY.strip())
+            con.execute(DDL_POZYCJE.strip())
+            con.execute(
+                "INSERT INTO faktury (id, plik, numer, nazwa_sprzedawcy, "
+                "nip_sprzedawcy, nazwa_nabywcy, nip_nabywcy, data_wystawienia, "
+                "termin_platnosci, netto, vat, brutto, bledy, status) "
+                "SELECT id, plik, numer, nazwa_sprzedawcy, nip_sprzedawcy, "
+                "nazwa_nabywcy, nip_nabywcy, data_wystawienia, termin_platnosci, "
+                "netto, vat, brutto, bledy, status FROM faktury_stara")
+            con.execute(
+                "INSERT INTO pozycje (id, faktura_id, nazwa, ilosc, "
+                "cena_netto, wartosc_netto, status) "
+                "SELECT id, faktura_id, nazwa, ilosc, cena_netto, "
+                "wartosc_netto, status FROM pozycje_stare")
+            con.execute("DROP TABLE pozycje_stare")
+            con.execute("DROP TABLE faktury_stara")
+    finally:
+        con.execute("PRAGMA foreign_keys = ON")
+
+
 def polacz(sciezka: str = SCIEZKA_BAZY) -> sqlite3.Connection:
-    """Otwiera bazę, tworzy tabele i migruje stary schemat (bez plik)."""
+    """Otwiera bazę, tworzy tabele i migruje stare schematy."""
     con = sqlite3.connect(sciezka)
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(DDL)
     _migruj_plik(con)
-    # indeks dopiero po migracji — na starszej bazie kolumna plik
+    _migruj_status(con)
+    # indeks dopiero po migracjach — na starszej bazie kolumna plik
     # powstaje w _migruj_plik, więc CREATE INDEX tutaj ma ją już zawsze:
     con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_faktury_plik ON faktury(plik)")
     return con
@@ -138,6 +184,24 @@ def zatwierdz_fakture(con: sqlite3.Connection, faktura_id: int) -> bool:
             (faktura_id,),
         )
     return cur.rowcount > 0
+
+
+def oznacz_wyeksportowane(con: sqlite3.Connection) -> int:
+    """Przenosi faktury 'zatwierdzone' do statusu 'wyeksportowane'.
+
+    Wywoływane po udanym eksporcie — wyeksportowane faktury znikają
+    z panelu i (jak 'zatwierdzone') nie są cofane przez re-run.
+    Zwraca liczbę zmienionych faktur.
+    """
+    with con:
+        cur = con.execute(
+            "UPDATE faktury SET status = 'wyeksportowane' "
+            "WHERE status = 'zatwierdzone'")
+        con.execute(
+            "UPDATE pozycje SET status = 'wyeksportowane' "
+            "WHERE status != 'wyeksportowane' AND faktura_id IN "
+            "(SELECT id FROM faktury WHERE status = 'wyeksportowane')")
+    return cur.rowcount
 
 
 def zapisz_fakture(con: sqlite3.Connection, rekord: dict) -> None:
@@ -169,8 +233,8 @@ def zapisz_fakture(con: sqlite3.Connection, rekord: dict) -> None:
                 "WHERE plik = ? OR (numer = ? AND nip_sprzedawcy IS ?)",
                 tozsamosc,
             ).fetchone()
-            if wiersz and wiersz[0] == "zatwierdzone":
-                status = "zatwierdzone"
+            if wiersz and wiersz[0] in ("zatwierdzone", "wyeksportowane"):
+                status = wiersz[0]  # akceptacja/eksport — nie cofamy re-runem
             # zastąp poprzedni wpis tej samej faktury (kasuje też pozycje
             # przez ON DELETE CASCADE):
             con.execute(
