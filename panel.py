@@ -43,8 +43,10 @@ from weryfikator import (PRZERWA, renderuj_pdf_do_png, waliduj,
                          wyodrebnij_dane, zapisz_wyniki)
 
 SCIEZKA_WYNIKOW = os.path.join("data", "wyniki_weryfikacji.json")
-HOST = "127.0.0.1"
-PORT = 5000
+# Na hoście panel jest lokalny (127.0.0.1); w kontenerze compose ustawia
+# PANEL_HOST=0.0.0.0, żeby dosięgła go nakładka/przeglądarka z sieci:
+HOST = os.environ.get("PANEL_HOST", "127.0.0.1")
+PORT = int(os.environ.get("PANEL_PORT", "5000"))
 
 app = Flask(__name__)
 
@@ -178,6 +180,8 @@ def api_eksport():
     try:
         n = eksport.eksportuj_xml(con)  # status: zatwierdzone
         pdfy = eksport.zapisz_pdf_do_przetworzonych(con)
+        if n:
+            baza.oznacz_wyeksportowane(con)  # znikają z panelu
     finally:
         baza.zamknij(con)
     if n == 0:
@@ -227,8 +231,13 @@ def przygotuj_dane() -> int:
 def main():
     przygotuj_dane()
     url = f"http://{HOST}:{PORT}"
-    print(f"Panel: {url}  (Ctrl+C kończy)")
-    webbrowser.open(url)
+    if os.environ.get("BEZ_PRZEGLADARKI") == "1":
+        # kontener/VPS: przeglądarki tam nie ma, URL otwiera użytkownik
+        # (albo nakładka desktopowa na swoim komputerze):
+        print(f"Panel: {url}")
+    else:
+        print(f"Panel: {url}  (Ctrl+C kończy)")
+        webbrowser.open(url)
     app.run(host=HOST, port=PORT)
 
 

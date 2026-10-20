@@ -1,0 +1,40 @@
+# Omega Faktury — serwer na VPS (lub lokalnie).
+#
+#   docker compose up -d            # start panelu (http://localhost:5000)
+#   docker compose run --rm cykl    # jednorazowo: nowe PDF-y + eksport XML
+#   docker compose logs -f panel    # podgląd logów
+#   docker compose down             # stop (dane w ./data przeżywają)
+#
+# Serwis "cykl" ma profiles, więc NIE startuje razem z "up" — to narzędzie
+# uruchamiane ręcznie. Oba serwisy współdzielą volume ./data (PDF-y, baza
+# SQLite, wyniki weryfikacji) i ./przetworzone (eksport XML + PDF-y).
+services:
+  panel:
+    build: .
+    image: omega-faktury
+    restart: unless-stopped      # wstaje samo po restarcie maszyny
+    env_file: .env               # GEMINI_API_KEY — tylko tu, nigdy w obrazie
+    environment:
+      - BEZ_PRZEGLADARKI=1       # w kontenerze nie ma przeglądarki
+      - PANEL_HOST=0.0.0.0       # Flask ma słuchać też spoza kontenera
+    volumes:
+      - ./data:/app/data
+      - ./przetworzone:/app/przetworzone
+    ports:
+      - "5000:5000"
+    logging:
+      driver: json-file          # rotacja logów, żeby nie zjadły dysku
+      options: { max-size: "10m", max-file: "3" }
+
+  cykl:
+    image: omega-faktury         # ten sam obraz (buduje go serwis panel)
+    profiles: ["narzedzia"]      # uruchamiany tylko ręcznie (run --rm)
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./przetworzone:/app/przetworzone
+    # Kolejność celowa: gdy weryfikator padnie (brak klucza/PDF-ów wychodzi
+    # z niezerowym kodem), && nie dopuści do eksportu. Do XML trafiają
+    # faktury bez błędów walidacji; ręcznie zatwierdzone eksportuje
+    # księgowa z panelu (dostają tam status "wyeksportowane").
+    command: sh -c "python weryfikator.py && python eksport.py do_zatwierdzenia"

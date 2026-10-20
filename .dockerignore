@@ -1,0 +1,22 @@
+# Wykluczone z build contextu (nie trafią do obrazu):
+#   .env, data/  — klucz API i dane NIGDY w obrazie (obraz = tylko kod;
+#                  dane żyją w volume, klucz przekazuje env_file w compose)
+#   .venv, __pycache__, *.pyc — śmieci budowania
+#   generator.py, desktop.py, main.py — nieużywane w kontenerze
+#   .git, .claude, uv.lock, dokumenty — niepotrzebne w obrazie
+.git
+.claude
+.venv
+__pycache__/
+*.pyc
+.env
+data/
+przetworzone/
+generator.py
+desktop.py
+main.py
+ikona.svg
+uv.lock
+.python-version
+DOCKER.md
+WORKLOG.md

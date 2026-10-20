@@ -268,12 +268,16 @@ function nastepnaFaktura() {
 async function eksportuj() {
   const odp = await fetch("/api/eksport", { method: "POST" });
   const w = await odp.json();
-  const miejsce = document.getElementById("wynik-eksportu");
   if (!odp.ok) {
-    miejsce.textContent = w.blad || "eksport nieudany";
+    document.getElementById("wynik-eksportu").textContent =
+      w.blad || "eksport nieudany";
     return;
   }
-  miejsce.innerHTML =
+  // najpierw odświeżenie (wyeksportowane znikają z listy), potem komunikat —
+  // renderTabela buduje #wynik-eksportu od nowa, więc tekst wpisany wcześniej
+  // przepadłby razem ze starą wersją paska:
+  await odswiez();
+  document.getElementById("wynik-eksportu").innerHTML =
     `Wyeksportowano ${w.liczba} faktur + ${w.pdfy} PDF-ów do ` +
     `${esc(w.folder)}/ — <a href="/eksport">pobierz ${esc(w.plik)}</a>`;
 }

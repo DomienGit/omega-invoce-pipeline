@@ -1,52 +1,80 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Dokumenty dataGeneracji="2026-10-19" system="OmegaProcessor" wersja="1.0">
+<Dokumenty dataGeneracji="2026-10-20" system="OmegaProcessor" wersja="1.0">
   <Faktura>
     <Naglowek>
-      <NumerFaktury>FV/2026/10/001</NumerFaktury>
-      <DataWystawienia>2026-10-04</DataWystawienia>
-      <DataSprzedazy>2026-10-04</DataSprzedazy>
-      <TerminPlatnosci>2026-10-11</TerminPlatnosci>
+      <NumerFaktury>FV/2026/10/008</NumerFaktury>
+      <DataWystawienia>2026-10-18</DataWystawienia>
+      <DataSprzedazy>2026-10-18</DataSprzedazy>
+      <TerminPlatnosci>2026-10-25</TerminPlatnosci>
     </Naglowek>
     <Sprzedawca>
-      <NIP>9083863799</NIP>
-      <Nazwa>Green Energy OZE sp. z o.o.</Nazwa>
+      <NIP>9973763117</NIP>
+      <Nazwa>Chem-Bud Materiały Budowlane sp. z o.o.</Nazwa>
     </Sprzedawca>
     <Nabywca>
-      <NIP>0265423512</NIP>
-      <Nazwa>Firma Budowlana Dom-Styl</Nazwa>
+      <NIP>5667010654</NIP>
+      <Nazwa>Gabinet Stomatologiczny Biały Ząb</Nazwa>
     </Nabywca>
     <Podsumowanie waluta="PLN">
-      <Netto>2687.56</Netto>
-      <VAT>618.14</VAT>
-      <Brutto>3305.70</Brutto>
+      <Netto>1515.80</Netto>
+      <VAT>348.63</VAT>
+      <Brutto>1864.43</Brutto>
     </Podsumowanie>
     <Pozycje>
       <Pozycja>
-        <Opis>Drożdże piekarskie świeże, 1 kg</Opis>
-        <Ilosc>4</Ilosc>
+        <Opis>Zestaw kluczy nasadowych 1/2 cala</Opis>
+        <Ilosc>8</Ilosc>
         <Jednostka />
-        <WartoscNetto>50.00</WartoscNetto>
+        <WartoscNetto>1512.00</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
       <Pozycja>
-        <Opis>Mąka pszenna typ 500, 25 kg</Opis>
+        <Opis>Energia elektryczna, 1 kWh</Opis>
         <Ilosc>4</Ilosc>
         <Jednostka />
-        <WartoscNetto>359.96</WartoscNetto>
+        <WartoscNetto>3.80</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
+    </Pozycje>
+    <Dekretacja zrodlo="AI">
+      <Kategoria>Inne</Kategoria>
+      <RejestrVAT>Zakup</RejestrVAT>
+    </Dekretacja>
+    <PlikPDF />
+  </Faktura>
+  <Faktura>
+    <Naglowek>
+      <NumerFaktury>FV/2026/10/010</NumerFaktury>
+      <DataWystawienia>2026-10-19</DataWystawienia>
+      <DataSprzedazy>2026-10-19</DataSprzedazy>
+      <TerminPlatnosci>2026-11-09</TerminPlatnosci>
+    </Naglowek>
+    <Sprzedawca>
+      <NIP>0500978826</NIP>
+      <Nazwa>Green Energy OZE sp. z o.o.</Nazwa>
+    </Sprzedawca>
+    <Nabywca>
+      <NIP>8121913614</NIP>
+      <Nazwa>Piekarnia Słodka Bułka</Nazwa>
+    </Nabywca>
+    <Podsumowanie waluta="PLN">
+      <Netto>212.56</Netto>
+      <VAT>48.89</VAT>
+      <Brutto>261.45</Brutto>
+    </Podsumowanie>
+    <Pozycje>
       <Pozycja>
-        <Opis>Cegła ceramiczna poryzowana, szt.</Opis>
-        <Ilosc>3</Ilosc>
+        <Opis>Diesel B7, 1 l</Opis>
+        <Ilosc>4</Ilosc>
         <Jednostka />
-        <WartoscNetto>9.60</WartoscNetto>
+        <WartoscNetto>23.56</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
       <Pozycja>
         <Opis>Zestaw kluczy nasadowych 1/2 cala</Opis>
-        <Ilosc>12</Ilosc>
+        <Ilosc>1</Ilosc>
         <Jednostka />
-        <WartoscNetto>2268.00</WartoscNetto>
+        <WartoscNetto>189.00</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
     </Pozycje>
@@ -58,137 +86,25 @@
   </Faktura>
   <Faktura>
     <Naglowek>
-      <NumerFaktury>FV/2026/10/002</NumerFaktury>
-      <DataWystawienia>2026-10-02</DataWystawienia>
-      <DataSprzedazy>2026-10-02</DataSprzedazy>
-      <TerminPlatnosci>2026-10-16</TerminPlatnosci>
-    </Naglowek>
-    <Sprzedawca>
-      <NIP>8161849590</NIP>
-      <Nazwa>Trans-Logistyka Polska sp. z o.o.</Nazwa>
-    </Sprzedawca>
-    <Nabywca>
-      <NIP>1034131649</NIP>
-      <Nazwa>Salon Fryzjerski Blondynka</Nazwa>
-    </Nabywca>
-    <Podsumowanie waluta="PLN">
-      <Netto>344.40</Netto>
-      <VAT>79.21</VAT>
-      <Brutto>423.61</Brutto>
-    </Podsumowanie>
-    <Pozycje>
-      <Pozycja>
-        <Opis>Drożdże piekarskie świeże, 1 kg</Opis>
-        <Ilosc>10</Ilosc>
-        <Jednostka />
-        <WartoscNetto>125.00</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Papier ksero A4, 500 arkuszy</Opis>
-        <Ilosc>5</Ilosc>
-        <Jednostka />
-        <WartoscNetto>124.50</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Mrożonki warzywne mix, 1 kg</Opis>
-        <Ilosc>13</Ilosc>
-        <Jednostka />
-        <WartoscNetto>94.90</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-    </Pozycje>
-    <Dekretacja zrodlo="AI">
-      <Kategoria>Inne</Kategoria>
-      <RejestrVAT>Zakup</RejestrVAT>
-    </Dekretacja>
-    <PlikPDF />
-  </Faktura>
-  <Faktura>
-    <Naglowek>
-      <NumerFaktury>FV/2026/10/003</NumerFaktury>
-      <DataWystawienia>2026-10-23</DataWystawienia>
-      <DataSprzedazy>2026-10-23</DataSprzedazy>
-      <TerminPlatnosci>2026-11-13</TerminPlatnosci>
-    </Naglowek>
-    <Sprzedawca>
-      <NIP>9283276486</NIP>
-      <Nazwa>Opon-Pol Hurtownia Opon sp. z o.o.</Nazwa>
-    </Sprzedawca>
-    <Nabywca>
-      <NIP>5030564135</NIP>
-      <Nazwa>Salon Fryzjerski Blondynka</Nazwa>
-    </Nabywca>
-    <Podsumowanie waluta="PLN">
-      <Netto>3773.90</Netto>
-      <VAT>868.00</VAT>
-      <Brutto>4641.90</Brutto>
-    </Podsumowanie>
-    <Pozycje>
-      <Pozycja>
-        <Opis>Mrożonki warzywne mix, 1 kg</Opis>
-        <Ilosc>6</Ilosc>
-        <Jednostka />
-        <WartoscNetto>43.80</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Papier ksero A4, 500 arkuszy</Opis>
-        <Ilosc>4</Ilosc>
-        <Jednostka />
-        <WartoscNetto>99.60</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Opona zimowa 205/55 R16</Opis>
-        <Ilosc>11</Ilosc>
-        <Jednostka />
-        <WartoscNetto>3520.00</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Ser mozzarella tarta, 1 kg</Opis>
-        <Ilosc>5</Ilosc>
-        <Jednostka />
-        <WartoscNetto>110.50</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-    </Pozycje>
-    <Dekretacja zrodlo="AI">
-      <Kategoria>Inne</Kategoria>
-      <RejestrVAT>Zakup</RejestrVAT>
-    </Dekretacja>
-    <PlikPDF />
-  </Faktura>
-  <Faktura>
-    <Naglowek>
-      <NumerFaktury>FV/2026/10/004</NumerFaktury>
-      <DataWystawienia>2026-10-15</DataWystawienia>
-      <DataSprzedazy>2026-10-15</DataSprzedazy>
+      <NumerFaktury>FV/2026/10/012</NumerFaktury>
+      <DataWystawienia>2026-10-08</DataWystawienia>
+      <DataSprzedazy>2026-10-08</DataSprzedazy>
       <TerminPlatnosci>2026-10-29</TerminPlatnosci>
     </Naglowek>
     <Sprzedawca>
-      <NIP>4238849692</NIP>
-      <Nazwa>Chem-Bud Materiały Budowlane sp. z o.o.</Nazwa>
+      <NIP>4278498081</NIP>
+      <Nazwa>Pol-Serwis Autoryzowany Serwis sp. z o.o.</Nazwa>
     </Sprzedawca>
     <Nabywca>
-      <NIP>2691669786</NIP>
-      <Nazwa>Gabinet Stomatologiczny Biały Ząb</Nazwa>
+      <NIP>1241182440</NIP>
+      <Nazwa>Firma Budowlana Dom-Styl</Nazwa>
     </Nabywca>
     <Podsumowanie waluta="PLN">
-      <Netto>1024.90</Netto>
-      <VAT>235.73</VAT>
-      <Brutto>1260.63</Brutto>
+      <Netto>3706.15</Netto>
+      <VAT>852.41</VAT>
+      <Brutto>4558.56</Brutto>
     </Podsumowanie>
     <Pozycje>
-      <Pozycja>
-        <Opis>Papier ksero A4, 500 arkuszy</Opis>
-        <Ilosc>7</Ilosc>
-        <Jednostka />
-        <WartoscNetto>174.30</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
       <Pozycja>
         <Opis>Diesel B7, 1 l</Opis>
         <Ilosc>15</Ilosc>
@@ -197,185 +113,24 @@
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
       <Pozycja>
-        <Opis>Energia elektryczna, 1 kWh</Opis>
-        <Ilosc>15</Ilosc>
-        <Jednostka />
-        <WartoscNetto>14.25</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Kawa ziarnista 1 kg</Opis>
-        <Ilosc>11</Ilosc>
-        <Jednostka />
-        <WartoscNetto>748.00</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-    </Pozycje>
-    <Dekretacja zrodlo="AI">
-      <Kategoria>Inne</Kategoria>
-      <RejestrVAT>Zakup</RejestrVAT>
-    </Dekretacja>
-    <PlikPDF />
-  </Faktura>
-  <Faktura>
-    <Naglowek>
-      <NumerFaktury>FV/2026/10/005</NumerFaktury>
-      <DataWystawienia>2026-10-11</DataWystawienia>
-      <DataSprzedazy>2026-10-11</DataSprzedazy>
-      <TerminPlatnosci>2026-10-18</TerminPlatnosci>
-    </Naglowek>
-    <Sprzedawca>
-      <NIP>4627048288</NIP>
-      <Nazwa>Opon-Pol Hurtownia Opon sp. z o.o.</Nazwa>
-    </Sprzedawca>
-    <Nabywca>
-      <NIP>4893252889</NIP>
-      <Nazwa>Warsztat Samochodowy u Zbyszka</Nazwa>
-    </Nabywca>
-    <Podsumowanie waluta="PLN">
-      <Netto>378.25</Netto>
-      <VAT>87.00</VAT>
-      <Brutto>465.25</Brutto>
-    </Podsumowanie>
-    <Pozycje>
-      <Pozycja>
-        <Opis>Cegła ceramiczna poryzowana, szt.</Opis>
-        <Ilosc>13</Ilosc>
-        <Jednostka />
-        <WartoscNetto>41.60</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Drożdże piekarskie świeże, 1 kg</Opis>
-        <Ilosc>5</Ilosc>
-        <Jednostka />
-        <WartoscNetto>62.50</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Energia elektryczna, 1 kWh</Opis>
-        <Ilosc>13</Ilosc>
-        <Jednostka />
-        <WartoscNetto>12.35</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
         <Opis>Abonament Microsoft 365, 1 mies.</Opis>
-        <Ilosc>11</Ilosc>
-        <Jednostka />
-        <WartoscNetto>261.80</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-    </Pozycje>
-    <Dekretacja zrodlo="AI">
-      <Kategoria>Inne</Kategoria>
-      <RejestrVAT>Zakup</RejestrVAT>
-    </Dekretacja>
-    <PlikPDF />
-  </Faktura>
-  <Faktura>
-    <Naglowek>
-      <NumerFaktury>FV/2026/10/006</NumerFaktury>
-      <DataWystawienia>2026-10-26</DataWystawienia>
-      <DataSprzedazy>2026-10-26</DataSprzedazy>
-      <TerminPlatnosci>2026-11-16</TerminPlatnosci>
-    </Naglowek>
-    <Sprzedawca>
-      <NIP>3039117187</NIP>
-      <Nazwa>Fresh Food Distribution sp. z o.o.</Nazwa>
-    </Sprzedawca>
-    <Nabywca>
-      <NIP>2782489630</NIP>
-      <Nazwa>Kancelaria Radcy Prawnego Kowalski</Nazwa>
-    </Nabywca>
-    <Podsumowanie waluta="PLN">
-      <Netto>2306.35</Netto>
-      <VAT>530.46</VAT>
-      <Brutto>2836.81</Brutto>
-    </Podsumowanie>
-    <Pozycje>
-      <Pozycja>
-        <Opis>Papier ksero A4, 500 arkuszy</Opis>
-        <Ilosc>15</Ilosc>
-        <Jednostka />
-        <WartoscNetto>373.50</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Kawa ziarnista 1 kg</Opis>
         <Ilosc>6</Ilosc>
         <Jednostka />
-        <WartoscNetto>408.00</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Mąka pszenna typ 500, 25 kg</Opis>
-        <Ilosc>15</Ilosc>
-        <Jednostka />
-        <WartoscNetto>1349.85</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Drożdże piekarskie świeże, 1 kg</Opis>
-        <Ilosc>14</Ilosc>
-        <Jednostka />
-        <WartoscNetto>175.00</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-    </Pozycje>
-    <Dekretacja zrodlo="AI">
-      <Kategoria>Inne</Kategoria>
-      <RejestrVAT>Zakup</RejestrVAT>
-    </Dekretacja>
-    <PlikPDF />
-  </Faktura>
-  <Faktura>
-    <Naglowek>
-      <NumerFaktury>FV/2026/10/007</NumerFaktury>
-      <DataWystawienia>2026-10-17</DataWystawienia>
-      <DataSprzedazy>2026-10-17</DataSprzedazy>
-      <TerminPlatnosci>2026-11-07</TerminPlatnosci>
-    </Naglowek>
-    <Sprzedawca>
-      <NIP>1331509838</NIP>
-      <Nazwa>Trans-Logistyka Polska sp. z o.o.</Nazwa>
-    </Sprzedawca>
-    <Nabywca>
-      <NIP>3010310519</NIP>
-      <Nazwa>Pracownia Graficzna Pixel</Nazwa>
-    </Nabywca>
-    <Podsumowanie waluta="PLN">
-      <Netto>2425.99</Netto>
-      <VAT>557.98</VAT>
-      <Brutto>2983.97</Brutto>
-    </Podsumowanie>
-    <Pozycje>
-      <Pozycja>
-        <Opis>Diesel B7, 1 l</Opis>
-        <Ilosc>11</Ilosc>
-        <Jednostka />
-        <WartoscNetto>64.79</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Cegła ceramiczna poryzowana, szt.</Opis>
-        <Ilosc>11</Ilosc>
-        <Jednostka />
-        <WartoscNetto>35.20</WartoscNetto>
+        <WartoscNetto>142.80</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
       <Pozycja>
         <Opis>Zestaw kluczy nasadowych 1/2 cala</Opis>
-        <Ilosc>6</Ilosc>
+        <Ilosc>15</Ilosc>
         <Jednostka />
-        <WartoscNetto>1134.00</WartoscNetto>
+        <WartoscNetto>2835.00</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
       <Pozycja>
-        <Opis>Toner do drukarki laserowej</Opis>
-        <Ilosc>8</Ilosc>
+        <Opis>Opona zimowa 205/55 R16</Opis>
+        <Ilosc>2</Ilosc>
         <Jednostka />
-        <WartoscNetto>1192.00</WartoscNetto>
+        <WartoscNetto>640.00</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
     </Pozycje>
@@ -387,116 +142,25 @@
   </Faktura>
   <Faktura>
     <Naglowek>
-      <NumerFaktury>FV/2026/10/009</NumerFaktury>
-      <DataWystawienia>2026-10-05</DataWystawienia>
-      <DataSprzedazy>2026-10-05</DataSprzedazy>
-      <TerminPlatnosci>2026-10-26</TerminPlatnosci>
+      <NumerFaktury>FV/2026/10/013</NumerFaktury>
+      <DataWystawienia>2026-10-21</DataWystawienia>
+      <DataSprzedazy>2026-10-21</DataSprzedazy>
+      <TerminPlatnosci>2026-10-28</TerminPlatnosci>
     </Naglowek>
     <Sprzedawca>
-      <NIP>8013267732</NIP>
-      <Nazwa>Papier i Biuro Hurtownia sp. z o.o.</Nazwa>
+      <NIP>8740164004</NIP>
+      <Nazwa>Fresh Food Distribution sp. z o.o.</Nazwa>
     </Sprzedawca>
     <Nabywca>
-      <NIP>0260647460</NIP>
-      <Nazwa>Gabinet Stomatologiczny Biały Ząb</Nazwa>
+      <NIP>2427868011</NIP>
+      <Nazwa>Pizza Napoletana sp. z o.o.</Nazwa>
     </Nabywca>
     <Podsumowanie waluta="PLN">
-      <Netto>229.81</Netto>
-      <VAT>52.86</VAT>
-      <Brutto>282.67</Brutto>
+      <Netto>286.70</Netto>
+      <VAT>65.94</VAT>
+      <Brutto>352.64</Brutto>
     </Podsumowanie>
     <Pozycje>
-      <Pozycja>
-        <Opis>Diesel B7, 1 l</Opis>
-        <Ilosc>9</Ilosc>
-        <Jednostka />
-        <WartoscNetto>53.01</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Ser mozzarella tarta, 1 kg</Opis>
-        <Ilosc>8</Ilosc>
-        <Jednostka />
-        <WartoscNetto>176.80</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-    </Pozycje>
-    <Dekretacja zrodlo="AI">
-      <Kategoria>Inne</Kategoria>
-      <RejestrVAT>Zakup</RejestrVAT>
-    </Dekretacja>
-    <PlikPDF />
-  </Faktura>
-  <Faktura>
-    <Naglowek>
-      <NumerFaktury>FV/2026/10/011</NumerFaktury>
-      <DataWystawienia>2026-09-03</DataWystawienia>
-      <DataSprzedazy>2026-09-03</DataSprzedazy>
-      <TerminPlatnosci>2026-09-29</TerminPlatnosci>
-    </Naglowek>
-    <Sprzedawca>
-      <NIP>9985435347</NIP>
-      <Nazwa>Papier i Biuro Hurtownia sp. z o.o.</Nazwa>
-    </Sprzedawca>
-    <Nabywca>
-      <NIP>2475107994</NIP>
-      <Nazwa>Gabinet Stomatologiczny Biały Ząb</Nazwa>
-    </Nabywca>
-    <Podsumowanie waluta="PLN">
-      <Netto>266.00</Netto>
-      <VAT>61.18</VAT>
-      <Brutto>327.18</Brutto>
-    </Podsumowanie>
-    <Pozycje>
-      <Pozycja>
-        <Opis>Usługa sprzątania pomieszczeń, 1 godz.</Opis>
-        <Ilosc>1</Ilosc>
-        <Jednostka />
-        <WartoscNetto>45.00</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-      <Pozycja>
-        <Opis>Ser mozzarella tarta, 1 kg</Opis>
-        <Ilosc>10</Ilosc>
-        <Jednostka />
-        <WartoscNetto>221.00</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
-    </Pozycje>
-    <Dekretacja zrodlo="AI">
-      <Kategoria>Inne</Kategoria>
-      <RejestrVAT>Zakup</RejestrVAT>
-    </Dekretacja>
-    <PlikPDF />
-  </Faktura>
-  <Faktura>
-    <Naglowek>
-      <NumerFaktury>FV/2026/10/016</NumerFaktury>
-      <DataWystawienia>2026-10-03</DataWystawienia>
-      <DataSprzedazy>2026-10-03</DataSprzedazy>
-      <TerminPlatnosci>2026-10-17</TerminPlatnosci>
-    </Naglowek>
-    <Sprzedawca>
-      <NIP>1234563218</NIP>
-      <Nazwa>Pol-Serwis Autoryzowany Serwis sp. z o.o.</Nazwa>
-    </Sprzedawca>
-    <Nabywca>
-      <NIP>8236629942</NIP>
-      <Nazwa>Firma Budowlana Dom-Styl</Nazwa>
-    </Nabywca>
-    <Podsumowanie waluta="PLN">
-      <Netto>312.05</Netto>
-      <VAT>71.77</VAT>
-      <Brutto>383.82</Brutto>
-    </Podsumowanie>
-    <Pozycje>
-      <Pozycja>
-        <Opis>Energia elektryczna, 1 kWh</Opis>
-        <Ilosc>11</Ilosc>
-        <Jednostka />
-        <WartoscNetto>10.45</WartoscNetto>
-        <StawkaVAT>23</StawkaVAT>
-      </Pozycja>
       <Pozycja>
         <Opis>Cegła ceramiczna poryzowana, szt.</Opis>
         <Ilosc>4</Ilosc>
@@ -505,17 +169,220 @@
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
       <Pozycja>
-        <Opis>Mrożonki warzywne mix, 1 kg</Opis>
+        <Opis>Papier ksero A4, 500 arkuszy</Opis>
+        <Ilosc>11</Ilosc>
+        <Jednostka />
+        <WartoscNetto>273.90</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+    </Pozycje>
+    <Dekretacja zrodlo="AI">
+      <Kategoria>Inne</Kategoria>
+      <RejestrVAT>Zakup</RejestrVAT>
+    </Dekretacja>
+    <PlikPDF />
+  </Faktura>
+  <Faktura>
+    <Naglowek>
+      <NumerFaktury>FV/2026/10/014</NumerFaktury>
+      <DataWystawienia>2026-10-05</DataWystawienia>
+      <DataSprzedazy>2026-10-05</DataSprzedazy>
+      <TerminPlatnosci>2026-10-19</TerminPlatnosci>
+    </Naglowek>
+    <Sprzedawca>
+      <NIP>2045053310</NIP>
+      <Nazwa>Papier i Biuro Hurtownia sp. z o.o.</Nazwa>
+    </Sprzedawca>
+    <Nabywca>
+      <NIP>2563421603</NIP>
+      <Nazwa>Pizza Napoletana sp. z o.o.</Nazwa>
+    </Nabywca>
+    <Podsumowanie waluta="PLN">
+      <Netto>3277.31</Netto>
+      <VAT>753.78</VAT>
+      <Brutto>4031.09</Brutto>
+    </Podsumowanie>
+    <Pozycje>
+      <Pozycja>
+        <Opis>Ser mozzarella tarta, 1 kg</Opis>
+        <Ilosc>14</Ilosc>
+        <Jednostka />
+        <WartoscNetto>309.40</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Opona zimowa 205/55 R16</Opis>
         <Ilosc>6</Ilosc>
         <Jednostka />
-        <WartoscNetto>43.80</WartoscNetto>
+        <WartoscNetto>1920.00</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Abonament Microsoft 365, 1 mies.</Opis>
+        <Ilosc>10</Ilosc>
+        <Jednostka />
+        <WartoscNetto>238.00</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Mąka pszenna typ 500, 25 kg</Opis>
+        <Ilosc>9</Ilosc>
+        <Jednostka />
+        <WartoscNetto>809.91</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+    </Pozycje>
+    <Dekretacja zrodlo="AI">
+      <Kategoria>Inne</Kategoria>
+      <RejestrVAT>Zakup</RejestrVAT>
+    </Dekretacja>
+    <PlikPDF />
+  </Faktura>
+  <Faktura>
+    <Naglowek>
+      <NumerFaktury>FV/2026/10/015</NumerFaktury>
+      <DataWystawienia>2026-10-12</DataWystawienia>
+      <DataSprzedazy>2026-10-12</DataSprzedazy>
+      <TerminPlatnosci>2026-11-02</TerminPlatnosci>
+    </Naglowek>
+    <Sprzedawca>
+      <NIP>9401965564</NIP>
+      <Nazwa>Fresh Food Distribution sp. z o.o.</Nazwa>
+    </Sprzedawca>
+    <Nabywca>
+      <NIP>8169340609</NIP>
+      <Nazwa>Pracownia Graficzna Pixel</Nazwa>
+    </Nabywca>
+    <Podsumowanie waluta="PLN">
+      <Netto>146.75</Netto>
+      <VAT>33.75</VAT>
+      <Brutto>180.50</Brutto>
+    </Podsumowanie>
+    <Pozycje>
+      <Pozycja>
+        <Opis>Diesel B7, 1 l</Opis>
+        <Ilosc>15</Ilosc>
+        <Jednostka />
+        <WartoscNetto>88.35</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Mrożonki warzywne mix, 1 kg</Opis>
+        <Ilosc>8</Ilosc>
+        <Jednostka />
+        <WartoscNetto>58.40</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+    </Pozycje>
+    <Dekretacja zrodlo="AI">
+      <Kategoria>Inne</Kategoria>
+      <RejestrVAT>Zakup</RejestrVAT>
+    </Dekretacja>
+    <PlikPDF />
+  </Faktura>
+  <Faktura>
+    <Naglowek>
+      <NumerFaktury>FV/2026/10/017</NumerFaktury>
+      <DataWystawienia>2026-10-20</DataWystawienia>
+      <DataSprzedazy>2026-10-20</DataSprzedazy>
+      <TerminPlatnosci>2026-10-27</TerminPlatnosci>
+    </Naglowek>
+    <Sprzedawca>
+      <NIP>7773872148</NIP>
+      <Nazwa>Pol-Serwis Autoryzowany Serwis sp. z o.o.</Nazwa>
+    </Sprzedawca>
+    <Nabywca>
+      <NIP>9513433200</NIP>
+      <Nazwa>Autokomis Auto-Centrum</Nazwa>
+    </Nabywca>
+    <Podsumowanie waluta="PLN">
+      <Netto>3466.13</Netto>
+      <VAT>797.21</VAT>
+      <Brutto>4263.34</Brutto>
+    </Podsumowanie>
+    <Pozycje>
+      <Pozycja>
+        <Opis>Mrożonki warzywne mix, 1 kg</Opis>
+        <Ilosc>4</Ilosc>
+        <Jednostka />
+        <WartoscNetto>29.20</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Mąka pszenna typ 500, 25 kg</Opis>
+        <Ilosc>7</Ilosc>
+        <Jednostka />
+        <WartoscNetto>629.93</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Zestaw kluczy nasadowych 1/2 cala</Opis>
+        <Ilosc>13</Ilosc>
+        <Jednostka />
+        <WartoscNetto>2457.00</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
       <Pozycja>
         <Opis>Zestaw pędzli malarskich</Opis>
-        <Ilosc>7</Ilosc>
+        <Ilosc>10</Ilosc>
         <Jednostka />
-        <WartoscNetto>245.00</WartoscNetto>
+        <WartoscNetto>350.00</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+    </Pozycje>
+    <Dekretacja zrodlo="AI">
+      <Kategoria>Inne</Kategoria>
+      <RejestrVAT>Zakup</RejestrVAT>
+    </Dekretacja>
+    <PlikPDF />
+  </Faktura>
+  <Faktura>
+    <Naglowek>
+      <NumerFaktury>FV/2026/10/019</NumerFaktury>
+      <DataWystawienia>2026-10-08</DataWystawienia>
+      <DataSprzedazy>2026-10-08</DataSprzedazy>
+      <TerminPlatnosci>2026-10-22</TerminPlatnosci>
+    </Naglowek>
+    <Sprzedawca>
+      <NIP>5581223625</NIP>
+      <Nazwa>Fresh Food Distribution sp. z o.o.</Nazwa>
+    </Sprzedawca>
+    <Nabywca>
+      <NIP>1665876034</NIP>
+      <Nazwa>Salon Fryzjerski Blondynka</Nazwa>
+    </Nabywca>
+    <Podsumowanie waluta="PLN">
+      <Netto>1561.58</Netto>
+      <VAT>359.16</VAT>
+      <Brutto>1920.74</Brutto>
+    </Podsumowanie>
+    <Pozycje>
+      <Pozycja>
+        <Opis>Kawa ziarnista 1 kg</Opis>
+        <Ilosc>8</Ilosc>
+        <Jednostka />
+        <WartoscNetto>544.00</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Energia elektryczna, 1 kWh</Opis>
+        <Ilosc>2</Ilosc>
+        <Jednostka />
+        <WartoscNetto>1.90</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Diesel B7, 1 l</Opis>
+        <Ilosc>12</Ilosc>
+        <Jednostka />
+        <WartoscNetto>70.68</WartoscNetto>
+        <StawkaVAT>23</StawkaVAT>
+      </Pozycja>
+      <Pozycja>
+        <Opis>Zestaw kluczy nasadowych 1/2 cala</Opis>
+        <Ilosc>5</Ilosc>
+        <Jednostka />
+        <WartoscNetto>945.00</WartoscNetto>
         <StawkaVAT>23</StawkaVAT>
       </Pozycja>
     </Pozycje>

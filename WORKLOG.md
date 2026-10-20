@@ -120,3 +120,41 @@
       node --check na JS szablonu, panel odswiezony na nowym kodzie.
 }
 
+
+20-10-2026 {
+    Status "wyeksportowane" (baza.py, panel, eksport):
+    - po eksporcie faktury zatwierdzone dostaja status 'wyeksportowane'
+      i znikaja z panelu (api_faktury filtruje), nie cofa ich re-run
+      (ochrona w zapisz_fakture jak dla 'zatwierdzone')
+    - oznacz_wyeksportowane() w baza.py; woła ja panel po udanym
+      eksporcie i eksport.py z CLI (przy statusie zatwierdzone)
+    - CHECK statusow nie da sie zmienic w miejscu -> migracja
+      _migruj_status(): przebudowa tabel (rename, nowe DDL, kopia 1:1,
+      drop) przy pierwszym polacz(); test na kopii bazy przeszedl
+      (10 zatwierdzonych -> wyeksportowane, re-run nie cofa statusu)
+    - panel.html: po eksporcie najpierw odswiezenie listy, potem
+      komunikat (renderTabela buduje pasek od nowa)
+
+    Konteneryzacja (Dockerfile, docker-compose.yml, .dockerignore):
+    - obraz python:3.12-slim (3.14 nie ma sqlite3), tzdata +
+      TZ=Europe/Warsaw (lokalny czas w raportach/dataGeneracji),
+      uzytkownik nie-root uid 1000 (pliki w volume nie roota)
+    - zaleznosci z pyproject.toml (pip install ., warstwa cache'owana
+      przed kopiowaniem kodu); w obrazie weryfikator, baza, eksport,
+      panel + templates/; generator/desktop/main poza obrazem
+    - compose: serwis panel (restart unless-stopped, port 5000,
+      PANEL_HOST=0.0.0.0, BEZ_PRZEGLADARKI=1, env_file .env, volumes
+      ./data i ./przetworzone, rotacja logow 10m x3) + serwis cykl
+      (profiles, uruchamiany recznie: weryfikator + eksport
+      do_zatwierdzenia) — przygotowane pod VPS
+    - panel.py: HOST/PORT czytane z env (PANEL_HOST/PANEL_PORT,
+      domyslnie 127.0.0.1:5000 — desktop.py bez zmian); BEZ_PRZEGLADARKI=1
+      pomija webbrowser.open w kontenerze
+    - README: sekcja "Jak uruchomic (Docker)" + ostrazenie o braku
+      autoryzacji przy wystawieniu na publiczny IP
+
+    Testy: py_compile wszystkich modulow, migracja + oznaczanie +
+      ochrona statusu na kopii bazy, budowanie paczki z pyproject
+      (uv build) pod katem pip install . w obrazie. Build i uruchomienie
+      kontenera — po instalacji Dockera na hoscie (byl nieobecny).
+}

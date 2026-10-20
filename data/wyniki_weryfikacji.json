@@ -335,7 +335,8 @@
         "wartosc_netto": 176.8
       }
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 100.0
   },
   {
     "plik": "faktura_10.pdf",
@@ -392,7 +393,8 @@
         "wartosc_netto": 221
       }
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 85.7
   },
   {
     "plik": "faktura_12.pdf",
@@ -572,7 +574,8 @@
         "wartosc_netto": 245
       }
     ],
-    "bledy": []
+    "bledy": [],
+    "poprawnosc_danych_procent": 85.7
   },
   {
     "plik": "faktura_17.pdf",
