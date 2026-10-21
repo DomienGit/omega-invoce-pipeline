@@ -98,6 +98,11 @@
                     padding: 12px 16px; border-bottom: 1px solid var(--linia);
                     background: #fafbfc; flex-wrap: wrap; }
   .pasek-eksportu span { font-size: 13.5px; }
+  .pasek-wgrywania { display: flex; align-items: center; gap: 12px;
+                     padding: 12px 16px; background: var(--karta);
+                     border: 1px solid var(--linia); border-radius: 10px;
+                     flex-wrap: wrap; }
+  .pasek-wgrywania span { font-size: 13.5px; }
 </style>
 </head>
 <body>
@@ -109,6 +114,13 @@
 <nav id="zakladki"></nav>
 
 <main>
+  <div class="pasek-wgrywania" id="wgrywanie">
+    <button class="btn primary" id="btn-pliki">Wybierz faktury…</button>
+    <button class="btn" id="btn-folder">Wybierz folder…</button>
+    <span id="status-wgrywania"></span>
+    <input type="file" id="wybor-plikow" accept="application/pdf" multiple hidden>
+    <input type="file" id="wybor-folderu" webkitdirectory hidden>
+  </div>
   <div class="karta" id="tabela"></div>
   <section id="szczegoly" hidden></section>
 </main>
@@ -119,6 +131,9 @@ let DANE = null;
 let aktywnyFiltr = "wszystkie";
 let wybranyPlik = null;
 let pozycjaZatwierdzenia = null;  // do "Następna" po zatwierdzeniu
+let _sygnatura = "";              // odcisk stanu listy — render tylko przy zmianie
+let _pollId = null;               // interwał podglądu postępu batcha w tle
+let _ostatniKomunikat = "";       // podsumowanie ostatniego wgrywania
 
 const STATUSY = {
   zatwierdzone:     { etykieta: "zatwierdzona",     klasa: "ok" },
@@ -147,8 +162,17 @@ function badge(status) {
 }
 
 async function odswiez() {
-  const odp = await fetch("/api/faktury");
-  DANE = await odp.json();
+  const [odpFaktur, odpStatusu] = await Promise.all(
+    [fetch("/api/faktury"), fetch("/api/przetwarzanie")]);
+  DANE = await odpFaktur.json();
+  ustawPrzetwarzanie((await odpStatusu.json()).aktywny);
+  // render tylko przy zmianie stanu listy — podczas przetwarzania w tle
+  // polling co 4 s nie może przeładowywać podglądu PDF (embed traciłby
+  // pozycję przy każdym odpytaniu):
+  const sygnatura = DANE.faktury
+    .map((f) => `${f.id}:${f.status}:${f.bledy.length}`).join("|");
+  if (sygnatura === _sygnatura) return;
+  _sygnatura = sygnatura;
   if (wybranyPlik !== null &&
       !DANE.faktury.some((f) => f.plik === wybranyPlik)) {
     wybranyPlik = null;
@@ -158,6 +182,47 @@ async function odswiez() {
   renderTabela();
   renderSzczegoly();
 }
+
+function ustawPrzetwarzanie(aktywny) {
+  document.getElementById("btn-pliki").disabled = aktywny;
+  document.getElementById("btn-folder").disabled = aktywny;
+  document.getElementById("status-wgrywania").textContent = aktywny
+    ? "Przetwarzam nowe faktury… lista odświeża się sama."
+    : _ostatniKomunikat;
+  if (aktywny && !_pollId) _pollId = setInterval(odswiez, 4000);
+  if (!aktywny && _pollId) { clearInterval(_pollId); _pollId = null; }
+}
+
+async function wgraj(lista) {
+  const pliki = [...lista].filter((p) => p.name.toLowerCase().endsWith(".pdf"));
+  if (!pliki.length) {
+    alert("Wybrano pliki, ale żaden nie jest PDF-em.");
+    return;
+  }
+  const dane = new FormData();
+  pliki.forEach((p) => dane.append("pliki", p));
+  const odp = await fetch("/api/faktury/wgraj", { method: "POST", body: dane });
+  const w = await odp.json();
+  if (!odp.ok) { alert(w.blad || "wysyłka nieudana"); return; }
+  _ostatniKomunikat =
+    `Przyjęto ${w.zapisane} z ${pliki.length} plików` +
+    (w.pominiete.length ? ` (pominięte: ${w.pominiete.join("; ")})` : "");
+  await odswiez();
+}
+
+document.getElementById("btn-pliki").onclick = () =>
+  document.getElementById("wybor-plikow").click();
+document.getElementById("btn-folder").onclick = () =>
+  document.getElementById("wybor-folderu").click();
+// value="" po wyborze — wybór tego samego pliku drugi raz też odpala change:
+document.getElementById("wybor-plikow").onchange = (z) => {
+  wgraj(z.target.files);
+  z.target.value = "";
+};
+document.getElementById("wybor-folderu").onchange = (z) => {
+  wgraj(z.target.files);
+  z.target.value = "";
+};
 
 function renderNaglowek() {
   const ile = (pred) => DANE.faktury.filter(pred).length;

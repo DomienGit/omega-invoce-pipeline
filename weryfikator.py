@@ -278,12 +278,20 @@ def main():
             continue
 
         print(f"{nazwa}: odczyt...", flush=True)
-        png = renderuj_pdf_do_png(os.path.join("data", nazwa))
-        dane = wyodrebnij_dane(klient, png)
-        bledy = waliduj(dane)
+        try:
+            png = renderuj_pdf_do_png(os.path.join("data", nazwa))
+            dane = wyodrebnij_dane(klient, png)
+            bledy = waliduj(dane)
+        except Exception as e:
+            # zepsuty PDF albo API po wyczerpaniu prób — jeden plik nie
+            # może wywalić całego batcha. Rekord bez "pozycje", więc
+            # kolejny run ponowi próbę (jak w panelu):
+            dane, bledy = {}, [f"błąd przetwarzania: {e}"]
+            print(f"  BŁĄD: {e}")
+        else:
+            status = "OK" if not bledy else "BŁĄD: " + "; ".join(bledy)
+            print(f"  {dane.get('numer', '?'):20} -> {status}")
 
-        status = "OK" if not bledy else "BŁĄD: " + "; ".join(bledy)
-        print(f"  {dane.get('numer', '?'):20} -> {status}")
         wyniki.append({"plik": nazwa, **dane, "bledy": bledy})
         zapisz_wyniki(sciezka_wyniki, wyniki)  # zapis po każdej fakturze
         baza.zapisz_fakture(con, wyniki[-1])

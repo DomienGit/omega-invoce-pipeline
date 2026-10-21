@@ -10,6 +10,9 @@ Przebieg:
      Panel działa, dopóki skrypt jest uruchomiony (Ctrl+C kończy).
 
 Możliwości panelu (dla księgowej):
+  - wgrywanie faktur: przycisk "Wybierz faktury…" (pliki) albo
+    "Wybierz folder…" — PDF-y lądują w data/ i są przetwarzane w tle,
+    a lista odświeża się sama w trakcie,
   - zakładki: Wszystkie / Do zatwierdzenia / Błędy / Zatwierdzone,
   - podgląd: wyekstrahowane dane + pozycje obok oryginalnego PDF
     (tylko odczyt — bez możliwości korygowania),
@@ -21,20 +24,24 @@ Możliwości panelu (dla księgowej):
 Endpointy:
   GET  /                             panel (templates/panel.html)
   GET  /api/faktury                  lista faktur z pozycjami (JSON)
+  POST /api/faktury/wgraj            przyjęcie PDF-ów (multipart, w tle batch)
+  GET  /api/przetwarzanie            czy batch w tle właśnie działa
   GET  /pdf/<plik>                   oryginalny PDF (tylko pliki z bazy)
   POST /api/faktury/<id>/zatwierdz   zatwierdzenie faktury
   POST /api/eksport                  eksport zatwierdzonych do XML
-  GET  /eksport                      pobranie wygenerowanego XML
+  GET  /eksport                      pobranie najnowszego XML
 """
 
+import glob
 import json
 import os
+import threading
 import time
 import webbrowser
 from datetime import datetime
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, send_file, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory
 from google import genai
 
 import baza
@@ -49,6 +56,42 @@ HOST = os.environ.get("PANEL_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PANEL_PORT", "5000"))
 
 app = Flask(__name__)
+# PDF-y bywają ciężkie (skany) — hojny limit jednorazowej wysyłki:
+app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024
+
+# --- wgrywanie faktur (batch w tle) -----------------------------------------
+
+_PRZETWARZANIE = threading.Event()   # czy batch właśnie leci (status dla UI)
+_ZAMEK = threading.Lock()            # wzajemne wykluczanie przebiegów batcha
+
+
+def _przetworzone_pliki() -> set[str]:
+    """Nazwy plików obecne w wynikach — także nieudane próby (bez 'pozycje')."""
+    if not os.path.exists(SCIEZKA_WYNIKOW):
+        return set()
+    with open(SCIEZKA_WYNIKOW, encoding="utf-8") as plik:
+        return {w.get("plik") for w in json.load(plik)}
+
+
+def _nieprzetworzone_pdfy() -> list[str]:
+    """PDF-y w data/ bez żadnego wpisu w wynikach (surowy JSON, bez filtra)."""
+    zrobione = _przetworzone_pliki()
+    return [p for p in sorted(os.listdir("data"))
+            if p.endswith(".pdf") and p not in zrobione]
+
+
+def _batch_w_tle() -> None:
+    """Wątek tła po wgraniu plików: batch, a po nim — dopóki doszły pliki
+    w trakcie przebiegu — jeszcze raz. Bez klucza API nie startuje w ogóle
+    (pętla nie miałaby szans nic przetworzyć)."""
+    with _ZAMEK:
+        _PRZETWARZANIE.set()
+        try:
+            if os.environ.get("GEMINI_API_KEY"):
+                while _nieprzetworzone_pdfy():
+                    przygotuj_dane()
+        finally:
+            _PRZETWARZANIE.clear()
 
 
 # --- przetwarzanie batcha (bez zmian względem wersji statycznej) ----------
@@ -144,6 +187,39 @@ def api_faktury():
     })
 
 
+@app.post("/api/faktury/wgraj")
+def api_wgraj():
+    """Przyjmuje PDF-y od księgowej (multipart) i odpala batch w tle.
+
+    Pliki już przetworzone (ta sama nazwa w wynikach) i nie-PDF-y są
+    pomijane z powodem w odpowiedzi; reszta ląduje w data/ i zostanie
+    przetworzona przez _batch_w_tle (teraz albo po bieżącym przebiegu).
+    """
+    zrobione = _przetworzone_pliki()
+    zapisane: list[str] = []
+    pominiete: list[str] = []
+    for plik in request.files.getlist("pliki"):
+        # basename neutralizuje ewentualne ścieżki w nazwie (przejście
+        # poza data/ jest niemożliwe):
+        nazwa = os.path.basename(plik.filename or "")
+        if not nazwa.lower().endswith(".pdf"):
+            pominiete.append(f"{nazwa}: to nie jest PDF")
+        elif nazwa in zrobione:
+            pominiete.append(f"{nazwa}: już przetworzona")
+        else:
+            plik.save(os.path.join("data", nazwa))
+            zapisane.append(nazwa)
+
+    if zapisane and not _PRZETWARZANIE.is_set():
+        threading.Thread(target=_batch_w_tle, daemon=True).start()
+    return jsonify({"zapisane": len(zapisane), "pominiete": pominiete})
+
+
+@app.get("/api/przetwarzanie")
+def api_przetwarzanie():
+    return jsonify({"aktywny": _PRZETWARZANIE.is_set()})
+
+
 @app.get("/pdf/<plik>")
 def pdf(plik: str):
     # serwujemy wyłącznie pliki przypisane do faktur w bazie:
@@ -178,7 +254,7 @@ def api_zatwierdz(faktura_id: int):
 def api_eksport():
     con = baza.polacz()
     try:
-        n = eksport.eksportuj_xml(con)  # status: zatwierdzone
+        n, plik_xml = eksport.eksportuj_xml(con)  # status: zatwierdzone
         pdfy = eksport.zapisz_pdf_do_przetworzonych(con)
         if n:
             baza.oznacz_wyeksportowane(con)  # znikają z panelu
@@ -188,14 +264,19 @@ def api_eksport():
         return jsonify({"blad": "brak zatwierdzonych faktur do eksportu"}), 409
     return jsonify({"liczba": n, "pdfy": pdfy,
                     "folder": eksport.FOLDER_PRZETWORZONE,
-                    "plik": eksport.SCIEZKA_EKSPORTU})
+                    "plik": os.path.basename(plik_xml)})
 
 
 @app.get("/eksport")
 def pobierz_eksport():
-    if not os.path.exists(eksport.SCIEZKA_EKSPORTU):
+    # każdy eksport to nowy plik (eksport.xml, eksport_1.xml...) — pobieramy
+    # najnowszy, czyli o największej dacie modyfikacji:
+    pliki = sorted(
+        glob.glob(os.path.join(eksport.FOLDER_PRZETWORZONE, "eksport*.xml")),
+        key=os.path.getmtime)
+    if not pliki:
         return jsonify({"blad": "plik eksportu jeszcze nie powstał"}), 404
-    return send_file(eksport.SCIEZKA_EKSPORTU, as_attachment=True)
+    return send_file(pliki[-1], as_attachment=True)
 
 
 # --- start ----------------------------------------------------------------
@@ -229,7 +310,14 @@ def przygotuj_dane() -> int:
 
 
 def main():
-    przygotuj_dane()
+    # batch startowy pod tym samym zamkiem co wątek wgrywania — nowy
+    # upload w trakcie startu nie przetworzy niczego dwa razy:
+    with _ZAMEK:
+        _PRZETWARZANIE.set()
+        try:
+            przygotuj_dane()
+        finally:
+            _PRZETWARZANIE.clear()
     url = f"http://{HOST}:{PORT}"
     if os.environ.get("BEZ_PRZEGLADARKI") == "1":
         # kontener/VPS: przeglądarki tam nie ma, URL otwiera użytkownik

@@ -5,7 +5,8 @@ Podsumowanie, Pozycje, Dekretacja, PlikPDF). Docelowo plik trafia do
 importu w Comarch Optima.
 
 Wyniki lądują w folderze przetworzone/:
-  - eksport.xml — faktury o zadanym statusie,
+  - eksport.xml — faktury o zadanym statusie; kolejne eksporty NIE
+    nadpisują pliku — dostają numer: eksport_1.xml, eksport_2.xml...,
   - kopie oryginalnych PDF-ów zatwierdzonych faktur, nazwane
     [data wystawienia]_[numer faktury]_[kontrahent].pdf, gdzie
     kontrahent = sprzedawca (rejestr zakupu). Znaki niedozwolone
@@ -52,6 +53,21 @@ def _kwota(x) -> str:
     return "" if x is None else f"{x:.2f}"
 
 
+def _unikalna_sciezka(sciezka: str) -> str:
+    """Wolna ścieżka do zapisu: gdy plik istnieje, dopisuje _1, _2, ...
+
+    Kolejne eksporty nie kasują poprzednich: eksport.xml, eksport_1.xml,
+    eksport_2.xml...
+    """
+    if not os.path.exists(sciezka):
+        return sciezka
+    korzen, rozszerzenie = os.path.splitext(sciezka)
+    numer = 1
+    while os.path.exists(f"{korzen}_{numer}{rozszerzenie}"):
+        numer += 1
+    return f"{korzen}_{numer}{rozszerzenie}"
+
+
 def _ilosc(x) -> str:
     """Ilość: całkowita bez miejsc po przecinku (4), inna z dwoma (89.20)."""
     if x is None:
@@ -61,9 +77,11 @@ def _ilosc(x) -> str:
 
 def eksportuj_xml(con, sciezka: str = SCIEZKA_EKSPORTU, status: str = "zatwierdzone",
                   kategoria: str = "Inne", zatwierdzil: str | None = None,
-                  data_zatwierdzenia: str | None = None) -> int:
-    """Zapisuje faktury o danym statusie do XML. Zwraca ich liczbę.
+                  data_zatwierdzenia: str | None = None) -> tuple[int, str]:
+    """Zapisuje faktury o danym statusie do XML (nowy plik, bez nadpisywania).
 
+    Zwraca (liczba faktur, faktyczna ścieżka zapisanego pliku — z numerem,
+    gdy eksport.xml już istniał).
     zatwierdzil / data_zatwierdzenia — atrybuty <Dekretacja>; None = pomijamy.
     """
     faktury = con.execute(
@@ -126,12 +144,13 @@ def eksportuj_xml(con, sciezka: str = SCIEZKA_EKSPORTU, status: str = "zatwierdz
         _tekst(f, "PlikPDF", "")           
 
     ET.indent(korzen, space="  ")
+    sciezka = _unikalna_sciezka(sciezka)  # każdy eksport = nowy plik
     os.makedirs(os.path.dirname(sciezka) or ".", exist_ok=True)
     with open(sciezka, "w", encoding="utf-8") as plik:
         plik.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         plik.write(ET.tostring(korzen, encoding="unicode"))
 
-    return len(faktury)
+    return len(faktury), sciezka
 
 
 def zapisz_pdf_do_przetworzonych(con, folder_zrodlowy: str = "data",
@@ -169,7 +188,7 @@ if __name__ == "__main__":
                  f"weryfikator.py")
     status = sys.argv[1] if len(sys.argv) > 1 else "zatwierdzone"
     con = baza.polacz()
-    n = eksportuj_xml(con, status=status)
+    n, sciezka = eksportuj_xml(con, status=status)
     if status == "zatwierdzone":
         pdfy = zapisz_pdf_do_przetworzonych(con)
         if n:
@@ -177,6 +196,6 @@ if __name__ == "__main__":
     else:
         pdfy = 0
     baza.zamknij(con)
-    print(f"Wyeksportowano {n} faktur (status: {status}) do {SCIEZKA_EKSPORTU}")
+    print(f"Wyeksportowano {n} faktur (status: {status}) do {sciezka}")
     if pdfy:
         print(f"Skopiowano {pdfy} PDF-ów do {FOLDER_PRZETWORZONE}/")
