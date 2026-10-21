@@ -9,6 +9,7 @@ dependencies = [
     "google-genai>=2.29.0",
     "pymupdf>=1.28.2",
     "python-dotenv>=1.2.4",
+    "webview-python>=1.1.3",
 ]
 # generator.py (plik testowy, poza Dockerem) używa jeszcze pillow i reportlab,
 # a desktop.py pywebview — celowo poza zależnościami.

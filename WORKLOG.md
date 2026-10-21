@@ -158,3 +158,34 @@
       (uv build) pod katem pip install . w obrazie. Build i uruchomienie
       kontenera — po instalacji Dockera na hoscie (byl nieobecny).
 }
+
+
+21-10-2026 {
+    Wyniki_weryfikacji.json usuniety — baza jest jedynym stanem:
+    - odcisk_pliku (SHA-256) + blad_przetworzenia w tabeli faktury;
+      resume = wiersz o tej nazwie i tym samym odcisku bez bledu
+      przetwarzania. Nowa tresc pod znana nazwa -> przetwarzana,
+      nieudane proby (zepsuty PDF / limity API) -> ponawiane,
+      wyeksportowane pliki w data/ -> pomijane (bez petli w kolko)
+    - unikalnosc (plik oraz numer+NIP) tylko wsrod aktywnych —
+      czesciowe indeksy uq_aktywny_plik / uq_aktywny_numer
+      (WHERE status != 'wyeksportowane'); historia moze powtarzac
+      nazwy i numery; powtorka numeru faktury wyeksportowanej dostaje
+      blad "duplikat faktury wczesniej wyeksportowanej"
+    - migracja _migruj_schemat(): przebudowa tabel przy braku nowych
+      kolumn / tabelowym UNIQUE / CHECK bez 'wyeksportowane';
+      uzupelnij_odciski() backfill odciskow z plikow w data/
+    - oznacz_duplikaty(con) liczy bledy duplikatow numerow z bazy
+      i przelicza je od zera (zmiana numeru przy re-ekstrakcji zdejmuje
+      przedawniony blad u pozostalych); weryfikator i panel wspolnie
+      korzystaja z baza.zapisz_fakture/oznacz_duplikaty
+    - weryfikator.py: zapis po kazdej fakturze do bazy (nie JSON),
+      raport koncowy i porownanie z ground truth czytane z bazy
+      (pelny stan, tez historia); panel.py: batch/upload bez JSON,
+      przyjecie pliku o znanej tresci -> "juz przetworzona" bez API
+    - testy: migracja na kopii, podmiana aktywnej / ochrona
+      zatwierdzonych / duplikat wyeksportowanej / blad przetwarzania
+      ponawiany; migracja zywej bazy (backup w /tmp), weryfikator
+      pominal 20/20 bez wywolan API, panel: API 2 aktywne, upload
+      faktura_01.pdf -> pominieta, batch nie startuje
+}

@@ -14,18 +14,21 @@ Pipeline dla każdego pliku data/faktura_*.pdf:
        e) termin płatności nie jest wcześniejszy niż data wystawienia.
        Dodatkowo między fakturami: żaden numer faktury nie powtarza się.
   4. ZAPIS DO BAZY — SQLite data/faktury.db (moduł baza.py): tabela
-     faktury (nagłówki, kwoty, błędy, status) + pozycje. Ponowny zapis
-     tej samej faktury zastępuje wpis; status 'zatwierdzone' chroniony.
-  5. RAPORT        — wiersz na fakturę + podsumowanie (w tym suma netto)
-     + JSON z wynikami.
+     faktury (nagłówki, kwoty, błędy, status, odcisk pliku SHA-256)
+     + pozycje. Zapis po KAŻDEJ fakturze — przerwany batch można
+     wznowić. Ponowny zapis tej samej faktury zastępuje wpis; statusy
+     'zatwierdzone' i 'wyeksportowane' (historia) chronione.
+  5. RAPORT        — wiersz na fakturę + podsumowanie (w tym suma netto),
+     czytane z bazy po przetworzeniu batcha.
   6. PORÓWNANIE    — jeśli istnieje data/ground_truth.json: trafność
      wyekstrahowanych danych w % (pole po polu) + zapis raportu do
      data/raport_dokladnosci.json.
 
-Wznawianie: wyniki zapisywane są po KAŻDEJ fakturze do
-data/wyniki_weryfikacji.json. Przy ponownym uruchomieniu faktury już
-obecne w tym pliku są pomijane (przydatne przy limitach API lub przerwaniu).
-Wyniki ze starego schematu (bez pozycji) są przeliczane od nowa.
+Wznawianie: bazą stanu jest SQLite. Plik PDF jest pomijany, gdy w bazie
+jest wiersz o tej nazwie i tym samym odcisku treści (SHA-256) bez błędu
+przetwarzania. Nowa treść pod znaną nazwą oraz nieudane próby (zepsuty
+PDF, limity API) są przetwarzane ponownie; faktury wyeksportowane
+(historia) leżące dalej w data/ nie kręcą się w kółko.
 
 Uruchomienie:  python weryfikator.py
 Zależności:    google-genai, pymupdf, python-dotenv
@@ -191,19 +194,12 @@ def waliduj(f: dict) -> list[str]:
     return bledy
 
 
-def zapisz_wyniki(sciezka: str, wyniki: list[dict]):
-    """Zapisuje wyniki do JSON (posortowane po nazwie pliku)."""
-    with open(sciezka, "w", encoding="utf-8") as plik:
-        json.dump(sorted(wyniki, key=lambda w: w["plik"]),
-                  plik, ensure_ascii=False, indent=2)
-
-
 def porownaj_z_ground_truth(wyniki: list[dict]) -> dict | None:
-    """Porównuje wyekstrahowane dane z data/ground_truth.json.
+    """Porównuje dane z bazy z data/ground_truth.json.
 
+    wyniki = lista z baza.pobierz_faktury() (klucze jak kolumny tabeli).
     Zwraca {"trafnosc_danych_procent": ..., "trafnosc_klasyfikacji_procent": ...}
-    lub None, gdy plik ground truth nie istnieje. Dodatkowo dopisuje do
-    każdego wyniku pole "poprawnosc_danych_procent" (trafność tej faktury).
+    lub None, gdy plik ground truth nie istnieje.
     """
     sciezka_gt = os.path.join("data", "ground_truth.json")
     if not os.path.exists(sciezka_gt):
@@ -234,7 +230,6 @@ def porownaj_z_ground_truth(wyniki: list[dict]) -> dict | None:
         trafienia += lokalne
 
         n_porownan = len(pola_tekstowe) + len(pola_kwotowe)
-        w["poprawnosc_danych_procent"] = round(100 * lokalne / n_porownan, 1)
 
         # klasyfikacja: czy walidacja zgadza się z oczekiwaną (błąd vs ok)
         spodziewany_blad = oczekiwane.get("oczekiwana_walidacja") != "ok"
@@ -260,66 +255,55 @@ def main():
     if not pliki:
         sys.exit("Błąd: brak plików PDF w katalogu data/")
 
-    print(f"Weryfikacja {len(pliki)} faktur (model: {MODEL})\n")
+    # --- wznawianie: bazą stanu jest SQLite -----------------------------------
+    # Plik pomijamy, gdy w bazie jest wiersz o tej nazwie i tym samym
+    # odcisku treści bez błędu przetwarzania (uzupelnij_odciski domyka
+    # wiersze sprzed migracji schematu).
+    odciski = {p: baza.odcisk_pliku(os.path.join("data", p)) for p in pliki}
+    baza.uzupelnij_odciski(con, odciski)
+    zrobione = baza.przetworzone_pliki(con, odciski)
 
-    # --- wznawianie: wczytaj wyniki poprzedniego przebiegu -------------------
-    # Wyniki bez "pozycje" pochodzą ze starego schematu ekstrakcji —
-    # przeliczamy je od nowa (reguła d wymaga pozycji tabeli).
-    sciezka_wyniki = os.path.join("data", "wyniki_weryfikacji.json")
-    wyniki = []
-    if os.path.exists(sciezka_wyniki):
-        with open(sciezka_wyniki, encoding="utf-8") as plik:
-            wyniki = [w for w in json.load(plik) if "pozycje" in w]
-    zrobione = {w["plik"] for w in wyniki}
+    print(f"Weryfikacja {len(pliki)} faktur (model: {MODEL})\n")
 
     for nazwa in pliki:
         if nazwa in zrobione:
-            print(f"{nazwa}: już sprawdzona wcześniej, pomijam")
+            print(f"{nazwa}: już przetworzona, pomijam")
             continue
 
         print(f"{nazwa}: odczyt...", flush=True)
+        rekord = {"plik": nazwa, "odcisk_pliku": odciski[nazwa]}
         try:
             png = renderuj_pdf_do_png(os.path.join("data", nazwa))
             dane = wyodrebnij_dane(klient, png)
             bledy = waliduj(dane)
         except Exception as e:
             # zepsuty PDF albo API po wyczerpaniu prób — jeden plik nie
-            # może wywalić całego batcha. Rekord bez "pozycje", więc
-            # kolejny run ponowi próbę (jak w panelu):
-            dane, bledy = {}, [f"błąd przetwarzania: {e}"]
+            # może wywalić batcha. blad_przetwarzania w rekordzie sprawi,
+            # że kolejny run ponowi próbę:
+            opis = f"błąd przetwarzania: {e}"
+            dane, bledy = {}, [opis]
+            rekord["blad_przetwarzania"] = opis
             print(f"  BŁĄD: {e}")
         else:
             status = "OK" if not bledy else "BŁĄD: " + "; ".join(bledy)
             print(f"  {dane.get('numer', '?'):20} -> {status}")
 
-        wyniki.append({"plik": nazwa, **dane, "bledy": bledy})
-        zapisz_wyniki(sciezka_wyniki, wyniki)  # zapis po każdej fakturze
-        baza.zapisz_fakture(con, wyniki[-1])
+        rekord.update(dane)
+        rekord["bledy"] = bledy
+        baza.zapisz_fakture(con, rekord)  # zapis po każdej fakturze
         time.sleep(PRZERWA)
 
-    # --- duplikaty: ten sam numer faktury w dwóch plikach --------------------
-    widziane = {}
-    for w in sorted(wyniki, key=lambda x: x["plik"]):
-        numer = w.get("numer")
-        if numer in widziane:
-            opis = (f"duplikat numeru faktury {numer} "
-                    f"(wcześniejsze wystąpienie: {widziane[numer]})")
-            if opis not in w["bledy"]:  # zabezpieczenie przed powtórką przy wznowieniu
-                w["bledy"].append(opis)
-        else:
-            widziane[numer] = w["plik"]
-    zapisz_wyniki(sciezka_wyniki, wyniki)
+    # --- duplikaty: ten sam numer faktury wśród aktywnych ---------------------
+    # Baza przelicza błędy duplikatów od zera (także po re-ekstrakcji,
+    # która zmieniła numer którejś z faktur).
+    baza.oznacz_duplikaty(con)
 
-    # --- zapis do bazy: całość po checku duplikatów (statusy są finalne) ----
-    # Zapisujemy wszystkie wyniki, także wczytane z wznowienia — dzięki
-    # temu baza dogania JSON po przerwaniu albo skasowaniu faktury.db.
-    for w in wyniki:
-        baza.zapisz_fakture(con, w)
+    # --- raporty czytamy z bazy (pełny stan, także historia) ------------------
+    wyniki = baza.pobierz_faktury(con)
 
     # --- porównanie z ground truth ---------------------------------------------
     raport = porownaj_z_ground_truth(wyniki)
     if raport:
-        zapisz_wyniki(sciezka_wyniki, wyniki)  # z per-faktura trafnością w %
         sciezka_raport = os.path.join("data", "raport_dokladnosci.json")
         with open(sciezka_raport, "w", encoding="utf-8") as plik:
             json.dump(raport, plik, ensure_ascii=False, indent=2)
@@ -338,8 +322,7 @@ def main():
     for w in zle:
         print(f"  {w['plik']}: {'; '.join(w['bledy'])}")
     print(f"Suma netto wszystkich faktur: {suma_netto:.2f} zł")
-    print(f"Szczegółowe wyniki: {sciezka_wyniki}")
-    print(f"Baza faktur:        {baza.SCIEZKA_BAZY}")
+    print(f"Baza faktur: {baza.SCIEZKA_BAZY}")
 
     baza.zamknij(con)
 
