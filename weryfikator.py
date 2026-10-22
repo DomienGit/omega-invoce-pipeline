@@ -1,6 +1,8 @@
 """Weryfikator faktur — odczyt danych z PDF (Gemini) + walidacja + raport.
 
-Pipeline dla każdego pliku data/faktura_*.pdf:
+Kolejką przetwarzania jest BAZA: panel po wgraniu PDF-ów tworzy wiersze
+o statusie 'do_przetworzenia' (moduł baza.py), a weryfikator bierze je
+po kolei i dla każdego pliku data/<plik>:
   1. RENDEROWANIE  — pierwsza strona PDF zamieniana na obraz PNG (pymupdf),
      bo Gemini czyta obrazy, a nie "surowy" PDF.
   2. EKSTRAKCJA    — Gemini analizuje obraz i zwraca dane jako JSON
@@ -13,24 +15,23 @@ Pipeline dla każdego pliku data/faktura_*.pdf:
        d) suma wartości netto pozycji == "Razem netto" faktury,
        e) termin płatności nie jest wcześniejszy niż data wystawienia.
        Dodatkowo między fakturami: żaden numer faktury nie powtarza się.
-  4. ZAPIS DO BAZY — SQLite data/faktury.db (moduł baza.py): tabela
-     faktury (nagłówki, kwoty, błędy, status, odcisk pliku SHA-256)
-     + pozycje. Zapis po KAŻDEJ fakturze — przerwany batch można
-     wznowić. Ponowny zapis tej samej faktury zastępuje wpis; statusy
-     'zatwierdzone' i 'wyeksportowane' (historia) chronione.
+  4. ZAPIS         — wiersz faktury aktualizowany W MIEJSCU (status
+     do_zatwierdzenia / do_weryfikacji). Nieudana ekstrakcja (zepsuty
+     PDF, limity API) zostawia wiersz w 'do_przetworzenia' z opisem
+     błędu — dobierze go kolejny przebieg.
   5. RAPORT        — wiersz na fakturę + podsumowanie (w tym suma netto),
-     czytane z bazy po przetworzeniu batcha.
+     czytane z bazy po przetworzeniu kolejki.
   6. PORÓWNANIE    — jeśli istnieje data/ground_truth.json: trafność
      wyekstrahowanych danych w % (pole po polu) + zapis raportu do
      data/raport_dokladnosci.json.
 
-Wznawianie: bazą stanu jest SQLite. Plik PDF jest pomijany, gdy w bazie
-jest wiersz o tej nazwie i tym samym odcisku treści (SHA-256) bez błędu
-przetwarzania. Nowa treść pod znaną nazwą oraz nieudane próby (zepsuty
-PDF, limity API) są przetwarzane ponownie; faktury wyeksportowane
-(historia) leżące dalej w data/ nie kręcą się w kółko.
+Chwilowe błędy API (429/500/503) są ponawiane w trakcie próby (MAX_PROB
+× 30 s). Przerwany batch wznawia się sam: przy następnym uruchomieniu
+(panel, weryfikator, serwis cykl) lecą wszystkie faktury o statusie
+'do_przetworzenia' — nieprzetworzone widać też w panelu z przyciskiem
+"Przetwórz ponownie".
 
-Uruchomienie:  python weryfikator.py
+Uruchomienie:  python weryfikator.py   (przetwarza kolejkę z bazy)
 Zależności:    google-genai, pymupdf, python-dotenv
 Klucz API:     GEMINI_API_KEY w pliku .env
 """
@@ -48,7 +49,7 @@ from google.genai import types
 
 import baza
 
-MODEL = "gemini-3.1-flash-lite"
+MODEL = "gemini-3.5-flash-lite"
 DPI = 150                   # rozdzielczość renderowania PDF -> PNG
 TOLERANCJA_KWOT = 0.01      # zł — grosze mogą się różnić zaokrągleniem
 PRZERWA = 4                 # s między zapytaniami — free tier ma limit RPM
@@ -242,6 +243,41 @@ def porownaj_z_ground_truth(wyniki: list[dict]) -> dict | None:
     }
 
 
+def przetworz_kolejke(klient, con) -> int:
+    """Przetwarza faktury o statusie 'do_przetworzenia'.
+
+    Współdzielone z panelem (batch w tle po wgraniu plików). Zwraca
+    liczbę podjętych prób — wynik każdego pliku ląduje w bazie od razu,
+    więc przerwany przebieg można wznowić (status 'do_przetworzenia'
+    zostaje tylko przy nieudanej próbie).
+    """
+    kolejka = baza.pobierz_kolejke(con)
+    for f in kolejka:
+        print(f"{f['plik']}: odczyt...", flush=True)
+        try:
+            png = renderuj_pdf_do_png(os.path.join("data", f["plik"]))
+            dane = wyodrebnij_dane(klient, png)
+            bledy = waliduj(dane)
+        except Exception as e:
+            # zepsuty PDF albo API po wyczerpaniu prób — jeden plik nie
+            # może wywalić batcha; wiersz zostaje w 'do_przetworzenia'
+            # i dobierze go kolejny przebieg:
+            opis = f"błąd przetwarzania: {e}"
+            baza.oznacz_blad_przetworzenia(con, f["id"], opis)
+            print(f"  BŁĄD: {e}")
+        else:
+            baza.zapisz_wynik_ekstrakcji(con, f["id"], dane, bledy)
+            status = "OK" if not bledy else "BŁĄD: " + "; ".join(bledy)
+            print(f"  {dane.get('numer', '?'):20} -> {status}")
+            time.sleep(PRZERWA)  # przerywa tylko po wywołaniu API
+
+    if kolejka:
+        # ten sam numer w dwóch aktywnych fakturach — baza przelicza
+        # błędy duplikatów od zera:
+        baza.oznacz_duplikaty(con)
+    return len(kolejka)
+
+
 def main():
     load_dotenv()
     klucz = os.environ.get("GEMINI_API_KEY")
@@ -251,55 +287,19 @@ def main():
     klient = genai.Client(api_key=klucz)
     con = baza.polacz()
 
-    pliki = sorted(p for p in os.listdir("data") if p.endswith(".pdf"))
-    if not pliki:
-        sys.exit("Błąd: brak plików PDF w katalogu data/")
-
-    # --- wznawianie: bazą stanu jest SQLite -----------------------------------
-    # Plik pomijamy, gdy w bazie jest wiersz o tej nazwie i tym samym
-    # odcisku treści bez błędu przetwarzania (uzupelnij_odciski domyka
-    # wiersze sprzed migracji schematu).
-    odciski = {p: baza.odcisk_pliku(os.path.join("data", p)) for p in pliki}
-    baza.uzupelnij_odciski(con, odciski)
-    zrobione = baza.przetworzone_pliki(con, odciski)
-
-    print(f"Weryfikacja {len(pliki)} faktur (model: {MODEL})\n")
-
-    for nazwa in pliki:
-        if nazwa in zrobione:
-            print(f"{nazwa}: już przetworzona, pomijam")
-            continue
-
-        print(f"{nazwa}: odczyt...", flush=True)
-        rekord = {"plik": nazwa, "odcisk_pliku": odciski[nazwa]}
-        try:
-            png = renderuj_pdf_do_png(os.path.join("data", nazwa))
-            dane = wyodrebnij_dane(klient, png)
-            bledy = waliduj(dane)
-        except Exception as e:
-            # zepsuty PDF albo API po wyczerpaniu prób — jeden plik nie
-            # może wywalić batcha. blad_przetwarzania w rekordzie sprawi,
-            # że kolejny run ponowi próbę:
-            opis = f"błąd przetwarzania: {e}"
-            dane, bledy = {}, [opis]
-            rekord["blad_przetwarzania"] = opis
-            print(f"  BŁĄD: {e}")
-        else:
-            status = "OK" if not bledy else "BŁĄD: " + "; ".join(bledy)
-            print(f"  {dane.get('numer', '?'):20} -> {status}")
-
-        rekord.update(dane)
-        rekord["bledy"] = bledy
-        baza.zapisz_fakture(con, rekord)  # zapis po każdej fakturze
-        time.sleep(PRZERWA)
-
-    # --- duplikaty: ten sam numer faktury wśród aktywnych ---------------------
-    # Baza przelicza błędy duplikatów od zera (także po re-ekstrakcji,
-    # która zmieniła numer którejś z faktur).
-    baza.oznacz_duplikaty(con)
+    kolejka = baza.pobierz_kolejke(con)
+    if not kolejka:
+        print("Kolejka pusta — brak faktur do przetworzenia.\n")
+    else:
+        print(f"Weryfikacja {len(kolejka)} faktur (model: {MODEL})\n")
+        przetworz_kolejke(klient, con)
 
     # --- raporty czytamy z bazy (pełny stan, także historia) ------------------
-    wyniki = baza.pobierz_faktury(con)
+    # Wierszy czekających dalej w 'do_przetworzenia' (nieudane próby)
+    # nie liczymy do podsumowania ani trafności — ich dane nie istnieją:
+    wszystkie = baza.pobierz_faktury(con)
+    nieprzetworzone = [w for w in wszystkie if w["status"] == "do_przetworzenia"]
+    wyniki = [w for w in wszystkie if w["status"] != "do_przetworzenia"]
 
     # --- porównanie z ground truth ---------------------------------------------
     raport = porownaj_z_ground_truth(wyniki)
@@ -319,6 +319,11 @@ def main():
     print("\n=== PODSUMOWANIE ===")
     print(f"Poprawne:    {len(poprawne)}/{len(wyniki)}")
     print(f"Niepoprawne: {len(zle)}/{len(wyniki)}")
+    if nieprzetworzone:
+        print(f"Do przetworzenia (ponowienie przy kolejnym przebiegu): "
+              f"{len(nieprzetworzone)}")
+        for w in nieprzetworzone:
+            print(f"  {w['plik']}: {w.get('blad_przetworzenia') or 'czeka'}")
     for w in zle:
         print(f"  {w['plik']}: {'; '.join(w['bledy'])}")
     print(f"Suma netto wszystkich faktur: {suma_netto:.2f} zł")

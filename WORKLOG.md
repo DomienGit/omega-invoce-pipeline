@@ -189,3 +189,46 @@
       pominal 20/20 bez wywolan API, panel: API 2 aktywne, upload
       faktura_01.pdf -> pominieta, batch nie startuje
 }
+
+
+22-10-2026 {
+    Kolejka przetwarzania = statusy w bazie (koniec skanowania data/):
+    - wgranie PDF-a w panelu tworzy od razu wiersz 'do_przetworzenia'
+      (dodaj_do_kolejki: SHA-256 tresci -> "juz w kolejce" / "juz
+      przetworzona" / kolizja nazwy z zatwierdzona; aktywny wiersz
+      o tej nazwie z inna trescia = podmiana pliku), plik laduje
+      w data/ jako magazyn — zaden skrypt nie szuka tam nowych plikow
+    - weryfikator.przetworz_kolejke(klient, con) wspolna funkcja dla
+      CLI i panelu: pobierz_kolejke -> ekstrakcja -> zapis_wynik_
+      ekstrakcji (UPDATE w miejscu, statusy do_zatwierdzenia /
+      do_weryfikacji); nieudana proba = blad_przetworzenia, wiersz
+      zostaje w kolejce i jest ponawiany przy kolejnym przebiegu
+      (start panelu, weryfikator, serwis cykl) albo recznie
+    - panel: batch w tle po wgraniu (threading.Event + Lock, petla
+      az do opuszczenia kolejki — pliki wgrane w trakcie tez zlapane),
+      POST /api/przetwarzaj (409 pusta kolejka / 503 brak klucza),
+      zakladka "Do przetworzenia" + przyciski "Przetworz wszystkie" /
+      "Przetworz ponownie" (w podgladzie), pasek "Przetwarzam..."
+      + auto-odswiezanie co 4 s w trakcie batcha
+    - baza: uq_aktywny_numer SKASOWANY — dwa wiersze o tym samym
+      numerze maja wspolistniec widocznie z bledem "duplikat numeru
+      faktury" (oznacz_duplikaty), przy update w miejscu indeks
+      nie pozwolilby wpisac drugiej faktury o tym samym numerze
+    - migracja _migruj_schemat() odtwarza wpisy sqlite_sequence
+      z wartosci sprzed przebudowy: DROP TABLE kasowal sekwencje,
+      kolejny INSERT dostawal ponownie uzyte id, a osierocone
+      pozycje (po rekach z CLI bez PRAGMA foreign_keys) przylgaly
+      do swiezej faktury jako dziedziczone pozycje (wykryte na
+      zywej bazie; test regresyjny: id nad max-ever, zero sierot)
+
+    Testy: py_compile, migracja na kopii (7 scenariuszy kolejki),
+    panel na zywej bazie z pustym GEMINI_API_KEY (upload -> wiersz
+    w kolejce, powtorka -> "juz w kolejce", nie-PDF pominiety,
+    /api/przetwarzaj -> 503, /pdf tylko z bazy), weryfikator na
+    zywej bazie (kolejka pusta, raport GT odtworzony), sprzatanie
+    smieci testowych + osieroconych pozycji. Backup zywej bazy
+    przed migracja: /tmp/faktury_backup_przed_migracja_kolejka.db
+
+    UWAGA: kontener panel (localhost:5000) dalej dziala na starym
+    obrazie — po tych zmianach wymagany `docker compose build panel`.
+}

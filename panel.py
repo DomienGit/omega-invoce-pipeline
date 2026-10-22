@@ -3,30 +3,33 @@
 Uruchomienie:  python panel.py
 
 Przebieg:
-  1. Batch nowych PDF-ów z data/ (render -> Gemini -> walidacja -> zapis
-     do bazy), wznawianie jak w weryfikatorze (nazwa pliku + odcisk
-     treści w SQLite); zepsuty plik = rekord z "błąd przetwarzania"
-     (ponawiany przy kolejnym przebiegu); bez GEMINI_API_KEY krok pomijany.
+  1. Przy starcie: przetworzenie kolejki 'do_przetworzenia' z bazy
+     (wznowienie po przerwaniu — patrz niżej). Bez GEMINI_API_KEY krok
+     pomijany (kolejka czeka).
   2. Serwer Flask pod http://127.0.0.1:5000 + otwarcie w przeglądarce.
      Panel działa, dopóki skrypt jest uruchomiony (Ctrl+C kończy).
 
 Możliwości panelu (dla księgowej):
   - wgrywanie faktur: przycisk "Wybierz faktury…" (pliki) albo
-    "Wybierz folder…" — PDF-y lądują w data/ i są przetwarzane w tle,
-    a lista odświeża się sama w trakcie (ta sama treść przy tym samym
-    pliku nie jest czytana drugi raz),
-  - zakładki: Wszystkie / Do zatwierdzenia / Błędy / Zatwierdzone,
+    "Wybierz folder…" — każdy wskazany PDF dostaje wiersz o statusie
+    'do przetworzenia' i jest przetwarzany w tle; lista odświeża się
+    sama w trakcie. Ta sama treść (odcisk SHA-256) nie jest czytana
+    drugi raz ("już przetworzona" / "już w kolejce"),
+  - zakładki: Wszystkie / Do przetworzenia / Do zatwierdzenia / Błędy /
+    Zatwierdzone; przycisk "Przetwórz ponownie" dla czekających
+    (nieudanych) faktur — też automatycznie przy każdym starcie,
   - podgląd: wyekstrahowane dane + pozycje obok oryginalnego PDF
     (tylko odczyt — bez możliwości korygowania),
   - zatwierdzenie faktury bez błędów — status 'zatwierdzone' jest
-    chroniony przed nadpisaniem przez re-run,
+    chroniony przed nadpisaniem,
   - eksport zatwierdzonych faktur do XML + PDF-y (eksport.py), po czym
     faktury dostają status 'wyeksportowane' i znikają z panelu.
 
 Endpointy:
   GET  /                             panel (templates/panel.html)
   GET  /api/faktury                  lista faktur z pozycjami (JSON)
-  POST /api/faktury/wgraj            przyjęcie PDF-ów (multipart, w tle batch)
+  POST /api/faktury/wgraj            przyjęcie PDF-ów (multipart -> kolejka)
+  POST /api/przetwarzaj              ręczne przetworzenie kolejki (przycisk)
   GET  /api/przetwarzanie            czy batch w tle właśnie działa
   GET  /pdf/<plik>                   oryginalny PDF (tylko pliki z bazy)
   POST /api/faktury/<id>/zatwierdz   zatwierdzenie faktury
@@ -37,7 +40,6 @@ Endpointy:
 import glob
 import os
 import threading
-import time
 import webbrowser
 from datetime import datetime
 
@@ -47,8 +49,7 @@ from google import genai
 
 import baza
 import eksport
-from weryfikator import (PRZERWA, renderuj_pdf_do_png, waliduj,
-                         wyodrebnij_dane)
+import weryfikator
 
 # Na hoście panel jest lokalny (127.0.0.1); w kontenerze compose ustawia
 # PANEL_HOST=0.0.0.0, żeby dosięgła go nakładka/przeglądarka z sieci:
@@ -65,93 +66,27 @@ _PRZETWARZANIE = threading.Event()   # czy batch właśnie leci (status dla UI)
 _ZAMEK = threading.Lock()            # wzajemne wykluczanie przebiegów batcha
 
 
-def _odciski_pdfow() -> dict[str, str]:
-    """Nazwa -> SHA-256 treści dla wszystkich PDF-ów w data/."""
-    return {p: baza.odcisk_pliku(os.path.join("data", p))
-            for p in sorted(os.listdir("data")) if p.endswith(".pdf")}
-
-
-def _znane_pliki(odciski: dict[str, str]) -> set[str]:
-    """PDF-y, których treść baza już pomyślnie przetworziła (baza.py)."""
-    con = baza.polacz()
-    try:
-        baza.uzupelnij_odciski(con, odciski)
-        return baza.przetworzone_pliki(con, odciski)
-    finally:
-        baza.zamknij(con)
-
-
-def _nieprzetworzone_pdfy() -> list[str]:
-    """PDF-y w data/ do przetworzenia (nowa treść albo nieudana próba)."""
-    odciski = _odciski_pdfow()
-    return [p for p in odciski if p not in _znane_pliki(odciski)]
-
-
 def _batch_w_tle() -> None:
-    """Wątek tła po wgraniu plików: batch, a po nim — dopóki doszły pliki
-    w trakcie przebiegu — jeszcze raz. Bez klucza API nie startuje w ogóle
-    (pętla nie miałaby szans nic przetworzyć)."""
+    """Wątek tła: przetwarza kolejkę 'do_przetworzenia' z bazy (logika
+    w weryfikator.przetworz_kolejke), a po przebiegu sprawdza jeszcze raz
+    — pliki wgrane w trakcie też zostaną obsłużone. Bez klucza API nie
+    startuje (kolejka czeka)."""
     with _ZAMEK:
         _PRZETWARZANIE.set()
         try:
-            if os.environ.get("GEMINI_API_KEY"):
-                while _nieprzetworzone_pdfy():
-                    przygotuj_dane()
+            if not os.environ.get("GEMINI_API_KEY"):
+                return
+            klient = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            while True:
+                con = baza.polacz()
+                try:
+                    n = weryfikator.przetworz_kolejke(klient, con)
+                finally:
+                    baza.zamknij(con)
+                if n == 0:
+                    break
         finally:
             _PRZETWARZANIE.clear()
-
-
-# --- przetwarzanie batcha (wznawianie jak w weryfikatorze: baza + odcisk) --
-
-
-def przetworz_nowe_pdfy(klient, con) -> int:
-    """Wyciąga dane z PDF-ów, których baza jeszcze nie zna (nazwa + odcisk).
-
-    Zwraca liczbę przetworzonych plików. Po każdym pliku wynik ląduje
-    w bazie, więc przerwany batch można wznowić.
-    """
-    if klient is None:
-        print("Brak GEMINI_API_KEY — pomijam przetwarzanie nowych PDF-ów "
-              "(panel powstanie z danych w bazie).")
-        return 0
-
-    odciski = _odciski_pdfow()
-    baza.uzupelnij_odciski(con, odciski)
-    zrobione = baza.przetworzone_pliki(con, odciski)
-    nowe = [p for p in odciski if p not in zrobione]
-    if not nowe:
-        print("Brak nowych PDF-ów do przetworzenia.")
-        return 0
-
-    print(f"Przetwarzam {len(nowe)} nowych PDF-ów...\n")
-    for nazwa in nowe:
-        print(f"{nazwa}: odczyt...", flush=True)
-        rekord = {"plik": nazwa, "odcisk_pliku": odciski[nazwa]}
-        try:
-            png = renderuj_pdf_do_png(os.path.join("data", nazwa))
-            dane = wyodrebnij_dane(klient, png)
-            bledy = waliduj(dane)
-            rekord.update(dane)
-            rekord["bledy"] = bledy
-        except Exception as e:
-            # zepsuty PDF (bez kosztu wywołania API) albo API po wyczerpaniu
-            # prób — blad_przetwarzania w rekordzie sprawi, że kolejny
-            # przebieg ponowi próbę:
-            opis = f"błąd przetwarzania: {e}"
-            rekord["bledy"] = [opis]
-            rekord["blad_przetwarzania"] = opis
-            print(f"  BŁĄD: {e}")
-        else:
-            status = "OK" if not rekord["bledy"] else "BŁĄD: " + "; ".join(rekord["bledy"])
-            print(f"  {rekord.get('numer', '?'):20} -> {status}")
-            time.sleep(PRZERWA)  # przerywa tylko po wywołaniu API
-
-        baza.zapisz_fakture(con, rekord)
-
-    # ten sam numer faktury w dwóch aktywnych plikach — baza przelicza
-    # błędy duplikatów od zera (także po zmianie numeru przy re-ekstrakcji):
-    baza.oznacz_duplikaty(con)
-    return len(nowe)
 
 
 # --- endpointy ------------------------------------------------------------
@@ -182,34 +117,59 @@ def api_faktury():
 
 @app.post("/api/faktury/wgraj")
 def api_wgraj():
-    """Przyjmuje PDF-y od księgowej (multipart) i odpala batch w tle.
+    """Przyjmuje PDF-y od księgowej (multipart): każdy trafia do kolejki.
 
-    Nie-PDF-y są pomijane z powodem w odpowiedzi. PDF-y lądują w data/;
-    te, których treść baza już pomyślnie przetworzyła, nie są czytane
-    ponownie — resztę przetworzy _batch_w_tle (teraz albo po bieżącym
-    przebiegu).
+    Nie-PDF-y są pomijane z powodem. Treść już znaną bazie (odcisk
+    SHA-256) pomijamy ("już przetworzona" / "już w kolejce"), zanim plik
+    cokolwiek kosztuje. Przyjęte PDF-y lądują w data/ ze statusem
+    'do przetworzenia' i są przetwarzane w tle (od razu albo po bieżącym
+    przebiegu — patrz _batch_w_tle).
     """
     zapisane: list[str] = []
     pominiete: list[str] = []
-    for plik in request.files.getlist("pliki"):
-        # basename neutralizuje ewentualne ścieżki w nazwie (przejście
-        # poza data/ jest niemożliwe):
-        nazwa = os.path.basename(plik.filename or "")
-        if not nazwa.lower().endswith(".pdf"):
-            pominiete.append(f"{nazwa}: to nie jest PDF")
-        else:
-            plik.save(os.path.join("data", nazwa))
-            zapisane.append(nazwa)
-
-    if zapisane:
-        zrobione = _znane_pliki(_odciski_pdfow())
-        pominiete += [f"{n}: już przetworzona"
-                      for n in zapisane if n in zrobione]
-        zapisane = [n for n in zapisane if n not in zrobione]
+    con = baza.polacz()
+    try:
+        for plik in request.files.getlist("pliki"):
+            # basename neutralizuje ewentualne ścieżki w nazwie (przejście
+            # poza data/ jest niemożliwe):
+            nazwa = os.path.basename(plik.filename or "")
+            if not nazwa.lower().endswith(".pdf"):
+                pominiete.append(f"{nazwa}: to nie jest PDF")
+                continue
+            bajty = plik.read()
+            powod = baza.dodaj_do_kolejki(con, nazwa,
+                                          baza.odcisk_bajtow(bajty))
+            if powod:
+                pominiete.append(f"{nazwa}: {powod}")
+            else:
+                with open(os.path.join("data", nazwa), "wb") as docelowy:
+                    docelowy.write(bajty)
+                zapisane.append(nazwa)
+    finally:
+        baza.zamknij(con)
 
     if zapisane and not _PRZETWARZANIE.is_set():
         threading.Thread(target=_batch_w_tle, daemon=True).start()
     return jsonify({"zapisane": len(zapisane), "pominiete": pominiete})
+
+
+@app.post("/api/przetwarzaj")
+def api_przetwarzaj():
+    """Ręczne uruchomienie przetwarzania kolejki (przycisk w panelu)."""
+    con = baza.polacz()
+    try:
+        czeka = con.execute(
+            "SELECT 1 FROM faktury WHERE status = 'do_przetworzenia' LIMIT 1"
+        ).fetchone()
+    finally:
+        baza.zamknij(con)
+    if not czeka:
+        return jsonify({"blad": "kolejka jest pusta"}), 409
+    if not os.environ.get("GEMINI_API_KEY"):
+        return jsonify({"blad": "brak klucza GEMINI_API_KEY na serwerze"}), 503
+    if not _PRZETWARZANIE.is_set():
+        threading.Thread(target=_batch_w_tle, daemon=True).start()
+    return jsonify({"ok": True})
 
 
 @app.get("/api/przetwarzanie")
@@ -280,28 +240,31 @@ def pobierz_eksport():
 
 
 def przygotuj_dane() -> int:
-    """Batch nowych PDF-ów (stan przebiegu trzyma baza — patrz wyżej).
+    """Przetwarza kolejkę 'do_przetworzenia' (wznowienie po restarcie).
 
     Wydzielone z main(), żeby launcher desktopowy (desktop.py) mógł
-    wykonać ten sam krok bez kopiowania kodu. Zwraca liczbę nowych PDF-ów.
+    wykonać ten sam krok bez kopiowania kodu. Zwraca liczbę prób.
     """
     load_dotenv()
     klucz = os.environ.get("GEMINI_API_KEY")
-    klient = genai.Client(api_key=klucz) if klucz else None
+    if not klucz:
+        print("Brak GEMINI_API_KEY — kolejka 'do przetworzenia' czeka.")
+        return 0
+    klient = genai.Client(api_key=klucz)
 
     con = baza.polacz()
     try:
-        nowe = przetworz_nowe_pdfy(klient, con)
-        # podsumowanie liczymy z bazy (aktywne = jeszcze w obrocie):
+        n = weryfikator.przetworz_kolejke(klient, con)
         aktywne, z_bledem = con.execute(
             "SELECT COUNT(*), SUM(bledy != '[]') FROM faktury "
-            "WHERE status != 'wyeksportowane'").fetchone()
+            "WHERE status NOT IN ('wyeksportowane', 'do_przetworzenia')"
+        ).fetchone()
     finally:
         baza.zamknij(con)
 
-    print(f"\nNowe PDF-y: {nowe}, aktywnych faktur: {aktywne or 0} "
+    print(f"\nKolejka: {n} prób, aktywnych faktur: {aktywne or 0} "
           f"(z błędami: {z_bledem or 0})")
-    return nowe
+    return n
 
 
 def main():

@@ -53,6 +53,7 @@
   .badge.ok   { background: var(--ok-tlo);   color: var(--ok); }
   .badge.info { background: var(--info-tlo); color: var(--info); }
   .badge.blad { background: var(--blad-tlo); color: var(--blad); }
+  .badge.szary { background: #eceef1; color: var(--szary); }
 
   #szczegoly { display: grid; grid-template-columns: minmax(340px, 5fr) minmax(400px, 6fr);
                gap: 16px; }
@@ -139,6 +140,7 @@ const STATUSY = {
   zatwierdzone:     { etykieta: "zatwierdzona",     klasa: "ok" },
   do_zatwierdzenia: { etykieta: "do zatwierdzenia", klasa: "info" },
   do_weryfikacji:   { etykieta: "do weryfikacji",   klasa: "blad" },
+  do_przetworzenia: { etykieta: "do przetworzenia", klasa: "szary" },
 };
 
 // NULL-tolerancja: brak danych (np. NIP w fakturze 016) pokazujemy jako "—"
@@ -150,8 +152,11 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
 
 function pasuje(f, filtr) {
   if (filtr === "wszystkie") return true;
+  if (filtr === "do_przetworzenia") return f.status === "do_przetworzenia";
   if (filtr === "do_zatwierdzenia") return f.status === "do_zatwierdzenia";
-  if (filtr === "bledy") return f.bledy.length > 0;
+  // czekające w kolejce mają bledy=[opis], ale to nie błędy walidacji:
+  if (filtr === "bledy") return f.bledy.length > 0
+    && f.status !== "do_przetworzenia";
   if (filtr === "zatwierdzone") return f.status === "zatwierdzone";
   return false;
 }
@@ -228,8 +233,10 @@ function renderNaglowek() {
   const ile = (pred) => DANE.faktury.filter(pred).length;
   const kiedy = new Date(DANE.stanNa).toLocaleString("pl-PL");
   document.getElementById("naglowek").textContent =
-    `${DANE.faktury.length} faktur · ${ile((f) => f.status === "do_zatwierdzenia")} ` +
-    `do zatwierdzenia · ${ile((f) => f.bledy.length > 0)} z błędami · ` +
+    `${DANE.faktury.length} faktur · ${ile((f) => f.status === "do_przetworzenia")} ` +
+    `do przetworzenia · ${ile((f) => f.status === "do_zatwierdzenia")} ` +
+    `do zatwierdzenia · ${ile((f) => f.bledy.length > 0
+      && f.status !== "do_przetworzenia")} z błędami · ` +
     `${ile((f) => f.status === "zatwierdzone")} zatwierdzonych — stan na ${kiedy}`;
 }
 
@@ -237,6 +244,7 @@ function renderZakladki() {
   const licznik = (filtr) => DANE.faktury.filter((f) => pasuje(f, filtr)).length;
   const zakladki = [
     ["wszystkie", "Wszystkie"],
+    ["do_przetworzenia", "Do przetworzenia"],
     ["do_zatwierdzenia", "Do zatwierdzenia"],
     ["bledy", "Błędy"],
     ["zatwierdzone", "Zatwierdzone"],
@@ -261,6 +269,10 @@ function renderTabela() {
     <div class="pasek-eksportu">
       <button class="btn primary" id="btn-eksport">Eksportuj do XML</button>
       <span id="wynik-eksportu"></span>
+    </div>` : aktywnyFiltr === "do_przetworzenia" ? `
+    <div class="pasek-eksportu">
+      <button class="btn primary" id="btn-przetworz-wszystkie">Przetwórz wszystkie</button>
+      <span id="wynik-przetwarzania"></span>
     </div>` : "";
 
   const tbody = wiersze.map((f) => `
@@ -293,6 +305,8 @@ function renderTabela() {
 
   const btnEksport = document.getElementById("btn-eksport");
   if (btnEksport) btnEksport.onclick = eksportuj;
+  const btnPrzetworz = document.getElementById("btn-przetworz-wszystkie");
+  if (btnPrzetworz) btnPrzetworz.onclick = przetworz;
 
   document.querySelectorAll("#tabela tbody tr").forEach((wiersz) => {
     wiersz.onclick = () => {
@@ -306,6 +320,15 @@ function renderTabela() {
 }
 
 // --- akcje ----------------------------------------------------------------
+
+async function przetworz() {
+  // "Przetwórz wszystkie" / "Przetwórz ponownie" — przetwarzanie kolejki
+  // w tle; lista odświeża się sama (patrz ustawPrzetwarzanie):
+  const odp = await fetch("/api/przetwarzaj", { method: "POST" });
+  const w = await odp.json();
+  if (!odp.ok) { alert(w.blad || "nie udało się uruchomić przetwarzania"); return; }
+  await odswiez();
+}
 
 async function zatwierdz(f) {
   const odp = await fetch(`/api/faktury/${f.id}/zatwierdz`, { method: "POST" });
@@ -368,10 +391,16 @@ function renderPodglad(f) {
       <td class="kwota">${kwota(p.wartosc_netto)}</td>
     </tr>`).join("");
 
-  const bledy = f.bledy.length
-    ? `<h3>Błędy walidacji</h3><ul class="bledy">` +
-      f.bledy.map((b) => `<li>${esc(b)}</li>`).join("") + `</ul>`
-    : "";
+  const czeka = f.status === "do_przetworzenia";
+  const bledy = czeka
+    ? `<h3>Przetwarzanie</h3>
+       <p>${f.blad_przetworzenia
+          ? `Ostatnia próba nieudana: ${esc(f.blad_przetworzenia)}`
+          : "Czeka w kolejce — dane zostaną odczytane automatycznie."}</p>`
+    : f.bledy.length
+      ? `<h3>Błędy walidacji</h3><ul class="bledy">` +
+        f.bledy.map((b) => `<li>${esc(b)}</li>`).join("") + `</ul>`
+      : "";
 
   const pdfUrl = f.plik ? "/pdf/" + encodeURIComponent(f.plik) : null;
   const pdf = pdfUrl
@@ -380,7 +409,10 @@ function renderPodglad(f) {
          Otwórz ${esc(f.plik)} w nowej karcie</a>`
     : `<p class="brak-pdf">Brak pliku PDF dla tej faktury.</p>`;
 
-  const zatwierdzPrzycisk = f.status !== "zatwierdzone"
+  const przetworzPrzycisk = czeka
+    ? `<button class="btn primary" id="btn-przetworz">Przetwórz ponownie</button>`
+    : "";
+  const zatwierdzPrzycisk = !czeka && f.status !== "zatwierdzone"
     ? `<button class="btn primary" id="btn-zatwierdz"
          ${f.bledy.length ? "disabled title='Faktura ma błędy walidacji'" : ""}>
          Zatwierdz</button>`
@@ -396,6 +428,7 @@ function renderPodglad(f) {
       <h2>${val(f.numer)} ${badge(f.status)}
           <button class="zamknij" title="Zamknij szczegóły">×</button></h2>
       <div class="przyciski">
+        ${przetworzPrzycisk}
         ${zatwierdzPrzycisk}
         ${nastepnaPrzycisk}
       </div>
@@ -431,6 +464,8 @@ function renderPodglad(f) {
     renderTabela();
     renderSzczegoly();
   };
+  const btnPrzetworzJeden = document.getElementById("btn-przetworz");
+  if (btnPrzetworzJeden) btnPrzetworzJeden.onclick = przetworz;
   const btnZatwierdz = document.getElementById("btn-zatwierdz");
   if (btnZatwierdz) btnZatwierdz.onclick = () => zatwierdz(f);
   document.getElementById("btn-nastepna").onclick = () => {
