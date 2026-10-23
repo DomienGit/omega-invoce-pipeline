@@ -1,13 +1,15 @@
 # Omega Faktury — serwer na VPS (lub lokalnie).
 #
 #   docker compose up -d            # start panelu (http://localhost:5000)
+#                                   # + monitoringu (monitor, patrz niżej)
 #   docker compose run --rm cykl    # jednorazowo: nowe PDF-y + eksport XML
+#   docker compose run --rm straznik  # raport dzienny (crontab o 20:00)
 #   docker compose logs -f panel    # podgląd logów
 #   docker compose down             # stop (dane w ./data przeżywają)
 #
-# Serwis "cykl" ma profiles, więc NIE startuje razem z "up" — to narzędzie
-# uruchamiane ręcznie. Oba serwisy współdzielą volume ./data (PDF-y, baza
-# SQLite, wyniki weryfikacji) i ./przetworzone (eksport XML + PDF-y).
+# Serwisy "cykl" i "straznik" mają profiles, więc NIE startują razem
+# z "up" — to narzędzia uruchamiane ręcznie. Volume ./data (PDF-y, baza
+# SQLite) i ./przetworzone (eksport XML + PDF-y) współdzielone.
 services:
   panel:
     build: .
@@ -38,3 +40,29 @@ services:
     # faktury bez błędów walidacji; ręcznie zatwierdzone eksportuje
     # księgowa z panelu (dostają tam status "wyeksportowane").
     command: sh -c "python weryfikator.py && python eksport.py do_zatwierdzenia"
+
+  # Monitoring — znak życia co 15 min (dead man's switch). Monitor
+  # odpytuje panel od zewnątrz tak jak przeglądarka księgowej; ping do
+  # Healthchecks.io idzie TYLKO po udanej odpowiedzi, więc zawieszony
+  # panel = cisza = mail z Healthchecks (okno ustawiasz w jego UI).
+  monitor:
+    image: omega-faktury
+    restart: unless-stopped
+    command: python monitor.py    # bez tego wystartowałby panel (domyślne CMD)
+    env_file: .env
+    environment:
+      - MONITOR_URL=http://panel:5000
+    depends_on:
+      - panel
+
+  # Strażnik dzienny (raport + alerty) — uruchamiany crontabem hosta:
+  #   0 20 * * * cd /sciezka/do/projektu && docker compose run --rm straznik
+  # Alerty progowe pinguje jako /fail (natychmiastowy mail z Healthchecks).
+  straznik:
+    image: omega-faktury
+    profiles: ["narzedzia"]
+    command: python straznik.py   # bez tego wystartowałby panel (domyślne CMD)
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logi:/app/logi

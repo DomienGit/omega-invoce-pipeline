@@ -42,6 +42,7 @@ import hashlib
 import json
 import re
 import sqlite3
+from datetime import datetime
 
 SCIEZKA_BAZY = "data/faktury.db"
 
@@ -54,6 +55,8 @@ CREATE TABLE IF NOT EXISTS faktury (
     plik              TEXT,
     odcisk_pliku      TEXT,
     blad_przetworzenia TEXT,
+    wgrane_at         TEXT,     -- kiedy PDF wpadł do kolejki (monitoring)
+    przetworzone_at   TEXT,     -- kiedy agent skończył ekstrakcję
     numer             TEXT,
     nazwa_sprzedawcy  TEXT,
     nip_sprzedawcy    TEXT,
@@ -94,10 +97,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_aktywny_plik
 # kolumny kopiowane przy przebudowie tabeli (stare tabele mogą nie mieć
 # wszystkich — brakujące dostają NULL):
 KOLUMNY_MIGRACJI = (
-    "id", "plik", "odcisk_pliku", "blad_przetworzenia", "numer",
-    "nazwa_sprzedawcy", "nip_sprzedawcy", "nazwa_nabywcy", "nip_nabywcy",
-    "data_wystawienia", "termin_platnosci", "netto", "vat", "brutto",
-    "bledy", "status",
+    "id", "plik", "odcisk_pliku", "blad_przetworzenia", "wgrane_at",
+    "przetworzone_at", "numer", "nazwa_sprzedawcy", "nip_sprzedawcy",
+    "nazwa_nabywcy", "nip_nabywcy", "data_wystawienia", "termin_platnosci",
+    "netto", "vat", "brutto", "bledy", "status",
 )
 
 
@@ -125,7 +128,7 @@ def _migruj_schemat(con: sqlite3.Connection) -> None:
     Przebudowa, gdy: CHECK nie zna 'do_przetworzenia', jest tabelowy
     UNIQUE (numer, nip_sprzedawcy) — dziś numery nie są unikalne,
     duplikaty oznacza błędem oznacz_duplikaty — albo brakuje kolumn
-    odcisk_pliku / blad_przetworzenia.
+    odcisk_pliku / blad_przetworzenia / wgrane_at / przetworzone_at.
     """
     sql = con.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='faktury'"
@@ -136,7 +139,8 @@ def _migruj_schemat(con: sqlite3.Connection) -> None:
     przestarzala = (
         "do_przetworzenia" not in sql[0]
         or "UNIQUE" in sql[0]
-        or not {"odcisk_pliku", "blad_przetworzenia"} <= kolumny
+        or not {"odcisk_pliku", "blad_przetworzenia",
+                "wgrane_at", "przetworzone_at"} <= kolumny
     )
     if not przestarzala:
         return
@@ -270,8 +274,9 @@ def dodaj_do_kolejki(con: sqlite3.Connection, plik: str,
             con.execute("DELETE FROM faktury WHERE id = ?", (wiersz[0],))
 
         con.execute(
-            "INSERT INTO faktury (plik, odcisk_pliku, status) "
-            "VALUES (?, ?, 'do_przetworzenia')", (plik, odcisk))
+            "INSERT INTO faktury (plik, odcisk_pliku, wgrane_at, status) "
+            "VALUES (?, ?, ?, 'do_przetworzenia')",
+            (plik, odcisk, datetime.now().isoformat(timespec="seconds")))
     return None
 
 
@@ -318,12 +323,13 @@ def zapisz_wynik_ekstrakcji(con: sqlite3.Connection, faktura_id: int,
             "nip_sprzedawcy = ?, nazwa_nabywcy = ?, nip_nabywcy = ?, "
             "data_wystawienia = ?, termin_platnosci = ?, netto = ?, "
             "vat = ?, brutto = ?, bledy = ?, blad_przetworzenia = NULL, "
-            "status = ? WHERE id = ?",
+            "przetworzone_at = ?, status = ? WHERE id = ?",
             (numer, dane.get("nazwa_sprzedawcy"), nip_sprzedawcy,
              dane.get("nazwa_nabywcy"), nip_nabywcy,
              dane.get("data_wystawienia"), dane.get("termin_platnosci"),
              dane.get("netto"), dane.get("vat"), dane.get("brutto"),
-             json.dumps(bledy, ensure_ascii=False), status, faktura_id),
+             json.dumps(bledy, ensure_ascii=False),
+             datetime.now().isoformat(timespec="seconds"), status, faktura_id),
         )
         con.execute("DELETE FROM pozycje WHERE faktura_id = ?", (faktura_id,))
         con.executemany(
@@ -389,10 +395,10 @@ def oznacz_duplikaty(con: sqlite3.Connection) -> None:
 
 
 KOLUMNY_FAKTURY = (
-    "id", "plik", "odcisk_pliku", "blad_przetworzenia", "numer",
-    "nazwa_sprzedawcy", "nip_sprzedawcy", "nazwa_nabywcy", "nip_nabywcy",
-    "data_wystawienia", "termin_platnosci", "netto", "vat", "brutto",
-    "bledy", "status",
+    "id", "plik", "odcisk_pliku", "blad_przetworzenia", "wgrane_at",
+    "przetworzone_at", "numer", "nazwa_sprzedawcy", "nip_sprzedawcy",
+    "nazwa_nabywcy", "nip_nabywcy", "data_wystawienia", "termin_platnosci",
+    "netto", "vat", "brutto", "bledy", "status",
 )
 
 

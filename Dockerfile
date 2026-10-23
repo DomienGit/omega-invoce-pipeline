@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir .
 
 # Kod programu. Wszystkie ścieżki w skryptach są względne (data/,
 # przetworzone/, templates/) — załatwia je WORKDIR /app:
-COPY weryfikator.py baza.py eksport.py panel.py ./
+COPY weryfikator.py baza.py eksport.py panel.py monitor.py straznik.py ./
 COPY templates/ templates/
 
 USER appuser

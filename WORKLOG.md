@@ -232,3 +232,42 @@
     UWAGA: kontener panel (localhost:5000) dalej dziala na starym
     obrazie — po tych zmianach wymagany `docker compose build panel`.
 }
+
+
+23-10-2026 {
+    Monitoring (aplikacja na VPS ma sygnalizowac awarie sama):
+    - warstwy: auto-restart/healthcheck (juz byl) + monitor (dead man's
+      switch) + straznik dzienny; kanal alarmowy wylacznie Healthchecks.io
+      (brak pinga = mail, alert straznika = ping /fail = natychmiastowy
+      mail) — zadnego Telegrama ani SMTP
+    - monitor.py: nowy serwis compose, w petli GET /api/faktury jak
+      przegladarka ksiegowej; odpowiedz 200 -> ping do Healthchecks
+      z licznikami w body (widoczne w historii pingow), brak odpowiedzi
+      -> cisza = alarm; odpytanie z zewnatrz lapie zawieszony (zywy,
+      ale milczacy) panel, czego watek w panelu by nie zlapal
+    - straznik.py (crontab 20:00 -> docker compose run --rm straznik):
+      raport dnia (przetworzone dzisiaj / do sprawdzenia / wyeksportowane
+      / kolejka, plus plik logi/straznik_RRRR-MM-DD.txt) + 4 alerty
+      progowe: kolejka stoi >4 h, bledy rosna dzien po dniu (0<1<2,
+      dzisiaj >=2), spadek skutecznosci >=15 p.p. (okno 7 dni, min.
+      10 faktur), >=2 bledy API 429/500/503 w kolejce; aktywny alert
+      pinguje /fail
+    - baza: kolumny wgrane_at / przetworzone_at (migracja, NULL-e
+      w starych wierszach pomijane przez straznika)
+    - RUNBOOK.md: przepis "co zrobic gdy przyjdzie alert X" po jednym
+      na alert; README: sekcja Monitoring (setup Healthchecks ~5 min)
+    - .env: HEALTHCHECKS_URL + HEALTHCHECKS_STRAZNIK_URL (opcjonalne —
+      bez nich monitor/straznik dzialaja lokalnie bez wychodzenia na
+      zewnatrz)
+
+    Testy: migracja kolumn na kopii; monitor na zywo — panel na :5002 +
+      odbiornik udajacy Healthchecks na :5003: pingi z licznikami co
+      cykl, zabicie panela = "PANEL NIE ODPOWIADA" i zero nowych
+      pingow; straznik: 5 scenariuszy na spreparowanych bazach
+      (spokojny dzien / kolejka 5 h / 2x429 / trend 0->1->2 /
+      skutecznosc 73% -> 40%) — test wychwycil realny blad: LIKE
+      'RRRR-MM-DDT' bez % zawsze dawal "przetworzone dzisiaj: 0"
+      (poprawione); /fail potwierdzony na odbiorniku (PING .../fail
+      z raportem w body). Zlapane w compose: serwisy monitor/straznik
+      bez `command:` odpalilyby panel (domyślne CMD obrazu).
+}
