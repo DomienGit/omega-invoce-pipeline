@@ -345,8 +345,8 @@ def oznacz_blad_przetworzenia(con: sqlite3.Connection, faktura_id: int,
                               opis: str) -> None:
     """Nieudana ekstrakcja: wiersz zostaje w 'do_przetworzenia' z opisem.
 
-    Kolejny przebieg (restart panelu, przycisk 'Przetwórz ponownie',
-    serwis cykl) ponowi próbę — chwilowe błędy API (429/500/503) agent
+    Kolejny przebieg (restart panelu, przycisk 'Przetwórz ponownie')
+    ponowi próbę — chwilowe błędy API (429/500/503) agent
     i tak najpierw próbuje rozładować sam (patrz weryfikator).
     """
     with con:

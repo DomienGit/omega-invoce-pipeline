@@ -27,7 +27,7 @@ po kolei i dla każdego pliku data/<plik>:
 
 Chwilowe błędy API (429/500/503) są ponawiane w trakcie próby (MAX_PROB
 × 30 s). Przerwany batch wznawia się sam: przy następnym uruchomieniu
-(panel, weryfikator, serwis cykl) lecą wszystkie faktury o statusie
+(panel, weryfikator) lecą wszystkie faktury o statusie
 'do_przetworzenia' — nieprzetworzone widać też w panelu z przyciskiem
 "Przetwórz ponownie".
 

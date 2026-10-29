@@ -271,3 +271,74 @@
       z raportem w body). Zlapane w compose: serwisy monitor/straznik
       bez `command:` odpalilyby panel (domyślne CMD obrazu).
 }
+
+
+27-10-2026 {
+    Usuniety serwis compose "cykl" (weryfikator + eksport
+    do_zatwierdzenia jedną komendą) — eksportował faktury, których
+    księgowa nie zatwierdziła, omijając tym samym główną zasadę
+    systemu: nic nie idzie do Optimy bez decyzji człowieka. Relikt
+    sprzed panelu (era batchowa). Eksport zostaje wyłącznie przez
+    przycisk w panelu (status zatwierdzone). Wyczyszczone wzmianki
+    o cyklu: nagłówek compose, README, docstringi baza.py/
+    weryfikator.py, komentarz w Dockerfile.
+}
+
+
+28-10-2026 {
+    Logowanie do panelu + HTTPS (panel szedl na publiczny VPS):
+    - panel.py: sesje Flask — konta z PANEL_KONTA ("login=hash;...",
+      hash werkzeuga, haslo nigdy jawne), SECRET_KEY wymagany
+      (fail-fast przy starcie gdy brak), cookie HttpOnly +
+      SameSite=Lax, sesja 8 h (session.permanent); brama
+      before_request dla WSZYSTKICH endpointow (strona, API, PDF-y,
+      eksport) — API odpowiada 401 JSON, strony redirect na /login;
+      wyjatki: login/wyloguj/healthz + zapytania monitora z tokenem
+      Bearer (secrets.compare_digest); rate limit 5 blednych prob /
+      15 min blokady per IP (pamiec procesu, time.monotonic) +
+      0.3 s sleep przy bledzie; ProxyFix (x_for=1) tylko za
+      PANEL_ZA_PROXY=1, zeby Caddy przekazywal IP klienta
+    - nowe trasy: GET/POST /login (login.html, komunikat bledu bez
+      zdradzania co sie nie zgadza), POST /api/wyloguj,
+      GET /healthz (zywy proces bez danych — dla HEALTHCHECK)
+    - load_dotenv() przeniesiony na gore modulu (byl w
+      przygotuj_dane — za pozno dla konfiguracji sesji)
+    - monitor.py: naglowek Authorization Bearer z PANEL_TOKEN
+      (bez tokenu tryb deweloperski bez zmian)
+    - panel.html: przycisk "Wyloguj" w naglowku + wspolny fetchJSON
+      (401 => redirect na /login) podmieniony we wszystkich
+      wywolaniach API
+    - caddy w compose jako jedyne okno na swiat: port 443, tls
+      internal (certyfikat samopisany z SAN na IP — bez domeny
+      inaczej sie nie da; ostrzezenie przegladarki akceptowane,
+      certyfikaty w nazwanym volume zeby nie regenerowaly sie przy
+      restarcie), reverse_proxy panel:5000; panel traci ports:5000
+      (istnieje tylko w sieci compose); ADRES_VPS z .env w Caddyfile
+    - Dockerfile: HEALTHCHECK na /healthz (/api/faktury daloby 401)
+    - .env.example: wszystkie zmienne + komendy generujace
+      SECRET_KEY/PANEL_TOKEN/hash hasla; README: sekcja
+      "Logowanie i HTTPS"
+    - puste PANEL_KONTA = auth wylaczona (desktop.py lokalnie bez
+      zmian)
+
+    Testy: regresja auth-off (caly panel dziala bez logowania);
+    auth-on na zywo (curl): strony -> 302 /login, API/PDF/eksport
+    -> 401 JSON, /healthz publiczny, zle haslo -> 401 (jeden komunikat
+    bez zdradzania czego brak), poprawne -> 302 + cookie HttpOnly/
+    SameSite=Lax/Expires +8 h, sesja otwiera API i PDF, wylogowanie
+    zamyka dostep, Bearer dobry/zly -> 200/401, 5 blednych prob ->
+    429 nawet przy poprawnym hasle (udane logowanie kasuje licznik —
+    w testach dwukrotnie sie na tym nadzialalem); monitor z tokenem
+    pyta bez bledu, bez tokenu 401 = cisza; compose lokalnie z caddy:
+    panel healthy na nowym /healthz, https po adresie IP (SAN:IP),
+    port 5000 zdjety ze swiata, certyfikat przezywa restart caddy
+    (nazwany volume). Zlapane w trakcie testow: (1) caddy odrzucal
+    handshake przy laczeniu po IP — przegladarki NIE wysylaja SNI dla
+    adresow IP, ratuje globalna opcja default_sni {$ADRES_VPS} w
+    Caddyfile; (2) monitor dziedziczyl HEALTHCHECK panelu (probe :5000
+    w kontenerze, w ktorym nic nie nasluchuje) i byl wiecznie
+    "unhealthy" — healthcheck disable dla serwisu monitor; (3) pierwszy
+    ping monitora przy starcie zestawu potrafi trafic w batch startowy
+    panelu (connection refused w logach, nieszkodliwe — nastepna proba
+    za 15 min, grace Healthchecks 45 min).
+}

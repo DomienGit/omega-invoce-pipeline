@@ -27,6 +27,9 @@ Możliwości panelu (dla księgowej):
 
 Endpointy:
   GET  /                             panel (templates/panel.html)
+  GET/POST /login                    logowanie (gdy ustawione PANEL_KONTA)
+  POST /api/wyloguj                  koniec sesji
+  GET  /healthz                      "żywy" bez danych (HEALTHCHECK Dockera)
   GET  /api/faktury                  lista faktur z pozycjami (JSON)
   POST /api/faktury/wgraj            przyjęcie PDF-ów (multipart -> kolejka)
   POST /api/przetwarzaj              ręczne przetworzenie kolejki (przycisk)
@@ -39,17 +42,27 @@ Endpointy:
 
 import glob
 import os
+import secrets
 import threading
+import time
 import webbrowser
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import (Flask, jsonify, redirect, render_template, request,
+                   send_file, send_from_directory, session, url_for)
 from google import genai
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash
 
 import baza
 import eksport
 import weryfikator
+
+# .env potrzebny już przy konfiguracji logowania poniżej (kiedyś wołane
+# dopiero w przygotuj_dane() — za późno dla SECRET_KEY/PANEL_KONTA):
+load_dotenv()
 
 # Na hoście panel jest lokalny (127.0.0.1); w kontenerze compose ustawia
 # PANEL_HOST=0.0.0.0, żeby dosięgła go nakładka/przeglądarka z sieci:
@@ -59,6 +72,130 @@ PORT = int(os.environ.get("PANEL_PORT", "5000"))
 app = Flask(__name__)
 # PDF-y bywają ciężkie (skany) — hojny limit jednorazowej wysyłki:
 app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024
+
+# --- logowanie (sesje) ------------------------------------------------------
+
+# Konta w PANEL_KONTA jako "login=hash;login2=hash2" — hash z werkzeug
+# (generate_password_hash), nigdy jawne hasło. Hash zawiera ":" i "$",
+# więc separatorem jest ";" a klucz/wartość rozdziela pierwszy "=":
+def _wczytaj_konta() -> dict[str, str]:
+    konta: dict[str, str] = {}
+    for wpis in (os.environ.get("PANEL_KONTA") or "").split(";"):
+        login, _, haslo_hash = wpis.strip().partition("=")
+        if login:
+            konta[login] = haslo_hash
+    return konta
+
+
+KONTA = _wczytaj_konta()
+AUTH_WLACZONA = bool(KONTA)   # puste PANEL_KONTA = tryb deweloperski (bez logowania)
+PANEL_TOKEN = os.environ.get("PANEL_TOKEN") or ""
+
+if AUTH_WLACZONA and not os.environ.get("SECRET_KEY"):
+    raise SystemExit("PANEL_KONTA ustawione, ale brak SECRET_KEY — wygeneruj: "
+                     'python -c "import secrets; print(secrets.token_hex(32))"')
+
+if AUTH_WLACZONA:
+    app.config.update(
+        SECRET_KEY=os.environ["SECRET_KEY"],
+        SESSION_COOKIE_NAME="omega_panel_sesja",
+        SESSION_COOKIE_HTTPONLY=True,   # JS nie widzi ciasteczka (ochrona XSS)
+        SESSION_COOKIE_SAMESITE="Lax",  # ciasteczko nie leci w cross-site POST (CSRF)
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),  # dzień pracy księgowej
+    )
+
+# Za Caddy remote_addr to zawsze IP kontenera proxy — ProxyFix bierze IP
+# klienta z X-Forwarded-For. Włączone tylko w compose (PANEL_ZA_PROXY=1):
+# bez proxy klient mógłby podrobić nagłówek i resetować licznik prób.
+if os.environ.get("PANEL_ZA_PROXY") == "1":
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+
+# Nieudane logowania w pamięci procesu (restart czyści — akceptowalne):
+_PROBY: dict[str, list[float]] = defaultdict(list)
+_ZAMEK_PROB = threading.Lock()
+LIMIT_PROB = 5
+BLOKADA_S = 15 * 60
+
+
+def _zablokowane(ip: str) -> bool:
+    granica = time.monotonic() - BLOKADA_S
+    with _ZAMEK_PROB:
+        czasy = [t for t in _PROBY[ip] if t > granica]
+        _PROBY[ip] = czasy
+        return len(czasy) >= LIMIT_PROB
+
+
+def _blad_logowania(ip: str) -> None:
+    with _ZAMEK_PROB:
+        _PROBY[ip].append(time.monotonic())
+
+
+_PUBLICZNE = {"login", "login_post", "wyloguj", "healthz"}  # nazwy endpointów
+
+
+@app.before_request
+def pilnuj_dostepu():
+    """Jedna brama dla wszystkich endpointów (strona, API, PDF-y, eksport).
+
+    Przepuszcza: wyłączone logowanie, endpointy publiczne, żądania
+    monitora z tokenem (porównanie stałoczasowe), zalogowaną sesję.
+    API/PDF odpowiadają 401 JSON-em (łapie to JS panelu), strony
+    przekierowują na formularz logowania.
+    """
+    if (not AUTH_WLACZONA or request.endpoint in _PUBLICZNE
+            or request.endpoint is None):   # brak trasy = 404, nic nie wycieka
+        return None
+    if PANEL_TOKEN and secrets.compare_digest(
+            request.headers.get("Authorization", ""), f"Bearer {PANEL_TOKEN}"):
+        return None
+    if session.get("zalogowany"):
+        return None
+    if request.path.startswith(("/api/", "/pdf/")) or request.path == "/eksport":
+        return jsonify({"blad": "wymagane logowanie"}), 401
+    return redirect(url_for("login"))
+
+
+@app.get("/login")
+def login():
+    if not AUTH_WLACZONA or session.get("zalogowany"):
+        return redirect(url_for("strona"))
+    return render_template("login.html")
+
+
+@app.post("/login")
+def login_post():
+    ip = request.remote_addr or "?"
+    if _zablokowane(ip):
+        return render_template(
+            "login.html",
+            blad="Za dużo nieudanych prób — odczekaj ok. 15 minut."), 429
+    login = request.form.get("login", "").strip()
+    haslo = request.form.get("haslo", "")
+    haslo_hash = KONTA.get(login)
+    if haslo_hash and check_password_hash(haslo_hash, haslo):
+        session.clear()             # obrót sesji przy zmianie uprawnień
+        session["zalogowany"] = True
+        session["login"] = login
+        session.permanent = True    # bez tego brak Expires — wygaśnięcie 8 h nie działa
+        with _ZAMEK_PROB:
+            _PROBY.pop(ip, None)
+        return redirect(url_for("strona"))
+    _blad_logowania(ip)
+    time.sleep(0.3)                 # lekkie spowolnienie zgadywania hasła
+    # jeden komunikat dla złego loginu i hasła — nie zdradzamy, co się nie zgadza:
+    return render_template("login.html", blad="Błędny login lub hasło."), 401
+
+
+@app.post("/api/wyloguj")
+def wyloguj():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.get("/healthz")
+def healthz():
+    """Żywy proces bez żadnych danych — dla HEALTHCHECK Dockera."""
+    return jsonify({"ok": True})
 
 # --- wgrywanie faktur (batch w tle) -----------------------------------------
 
@@ -245,7 +382,6 @@ def przygotuj_dane() -> int:
     Wydzielone z main(), żeby launcher desktopowy (desktop.py) mógł
     wykonać ten sam krok bez kopiowania kodu. Zwraca liczbę prób.
     """
-    load_dotenv()
     klucz = os.environ.get("GEMINI_API_KEY")
     if not klucz:
         print("Brak GEMINI_API_KEY — kolejka 'do przetworzenia' czeka.")

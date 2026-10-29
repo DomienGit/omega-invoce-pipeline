@@ -23,7 +23,8 @@
   }
   h1 { margin: 0 0 4px; font-size: 20px; }
   header p { margin: 0; color: var(--szary); }
-  header { margin-bottom: 16px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start;
+           gap: 12px; margin-bottom: 16px; }
 
   nav { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   nav button {
@@ -108,8 +109,11 @@
 </head>
 <body>
 <header>
-  <h1>Panel faktur — Omega</h1>
-  <p id="naglowek"></p>
+  <div>
+    <h1>Panel faktur — Omega</h1>
+    <p id="naglowek"></p>
+  </div>
+  <button class="btn" id="btn-wyloguj">Wyloguj</button>
 </header>
 
 <nav id="zakladki"></nav>
@@ -150,6 +154,14 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[c]));
 
+// Wspólny fetch: wygasła sesja (401) kieruje na formularz logowania,
+// zanim kod zdąży próbować czytać odpowiedź jako dane:
+async function fetchJSON(url, opcje) {
+  const odp = await fetch(url, opcje);
+  if (odp.status === 401) location.href = "/login";
+  return odp;
+}
+
 function pasuje(f, filtr) {
   if (filtr === "wszystkie") return true;
   if (filtr === "do_przetworzenia") return f.status === "do_przetworzenia";
@@ -168,7 +180,7 @@ function badge(status) {
 
 async function odswiez() {
   const [odpFaktur, odpStatusu] = await Promise.all(
-    [fetch("/api/faktury"), fetch("/api/przetwarzanie")]);
+    [fetchJSON("/api/faktury"), fetchJSON("/api/przetwarzanie")]);
   DANE = await odpFaktur.json();
   ustawPrzetwarzanie((await odpStatusu.json()).aktywny);
   // render tylko przy zmianie stanu listy — podczas przetwarzania w tle
@@ -206,7 +218,7 @@ async function wgraj(lista) {
   }
   const dane = new FormData();
   pliki.forEach((p) => dane.append("pliki", p));
-  const odp = await fetch("/api/faktury/wgraj", { method: "POST", body: dane });
+  const odp = await fetchJSON("/api/faktury/wgraj", { method: "POST", body: dane });
   const w = await odp.json();
   if (!odp.ok) { alert(w.blad || "wysyłka nieudana"); return; }
   _ostatniKomunikat =
@@ -217,6 +229,12 @@ async function wgraj(lista) {
 
 document.getElementById("btn-pliki").onclick = () =>
   document.getElementById("wybor-plikow").click();
+// Wyloguj: koniec sesji po stronie serwera + powrót na formularz.
+// Przy wyłączonym logowaniu (tryb deweloperski) wraca na /login → /:
+document.getElementById("btn-wyloguj").onclick = async () => {
+  await fetchJSON("/api/wyloguj", { method: "POST" });
+  location.href = "/login";
+};
 document.getElementById("btn-folder").onclick = () =>
   document.getElementById("wybor-folderu").click();
 // value="" po wyborze — wybór tego samego pliku drugi raz też odpala change:
@@ -324,14 +342,14 @@ function renderTabela() {
 async function przetworz() {
   // "Przetwórz wszystkie" / "Przetwórz ponownie" — przetwarzanie kolejki
   // w tle; lista odświeża się sama (patrz ustawPrzetwarzanie):
-  const odp = await fetch("/api/przetwarzaj", { method: "POST" });
+  const odp = await fetchJSON("/api/przetwarzaj", { method: "POST" });
   const w = await odp.json();
   if (!odp.ok) { alert(w.blad || "nie udało się uruchomić przetwarzania"); return; }
   await odswiez();
 }
 
 async function zatwierdz(f) {
-  const odp = await fetch(`/api/faktury/${f.id}/zatwierdz`, { method: "POST" });
+  const odp = await fetchJSON(`/api/faktury/${f.id}/zatwierdz`, { method: "POST" });
   const w = await odp.json();
   if (!odp.ok) { alert(w.blad || "nie udało się zatwierdzić"); return; }
   // zapamiętaj pozycję w bieżącej zakładce: po odświeżeniu faktura
@@ -354,7 +372,7 @@ function nastepnaFaktura() {
 }
 
 async function eksportuj() {
-  const odp = await fetch("/api/eksport", { method: "POST" });
+  const odp = await fetchJSON("/api/eksport", { method: "POST" });
   const w = await odp.json();
   if (!odp.ok) {
     document.getElementById("wynik-eksportu").textContent =

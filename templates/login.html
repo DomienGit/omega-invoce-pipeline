@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!-- Strona logowania do panelu (serwowana przez render_template w panel.py,
+     dlatego może używać Jinja do komunikatu błędu). Wygląd: ta sama paleta
+     co panel.html, wyśrodkowana karta. -->
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logowanie — Panel faktur Omega</title>
+<style>
+  :root {
+    --tlo: #f4f5f7; --karta: #fff; --linia: #dde1e6;
+    --tekst: #1f2328; --szary: #6b7280;
+    --ok: #1a7f37;
+    --blad: #b42318; --blad-tlo: #fdecea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; background: var(--tlo); color: var(--tekst);
+    font: 14px/1.45 system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  form {
+    width: min(360px, 92vw); background: var(--karta);
+    border: 1px solid var(--linia); border-radius: 10px; padding: 28px;
+  }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  form > p.opis { margin: 0 0 18px; color: var(--szary); }
+  label { display: block; margin-bottom: 12px; color: var(--szary);
+          font-size: 13px; }
+  input {
+    display: block; width: 100%; margin-top: 4px; padding: 9px 10px;
+    border: 1px solid var(--linia); border-radius: 8px; font-size: 14px;
+    color: var(--tekst); background: #fff;
+  }
+  input:focus { outline: 2px solid var(--ok); outline-offset: -1px; }
+  button {
+    width: 100%; margin-top: 6px; padding: 10px 14px; border-radius: 8px;
+    border: 1px solid var(--ok); background: var(--ok); color: #fff;
+    font-size: 14px; cursor: pointer;
+  }
+  button:hover { background: #166c2e; }
+  .blad {
+    margin: 0 0 14px; padding: 8px 12px; border-radius: 8px;
+    background: var(--blad-tlo); color: var(--blad); font-size: 13.5px;
+  }
+</style>
+</head>
+<body>
+  <form method="post" action="/login">
+    <h1>Panel faktur — Omega</h1>
+    <p class="opis">Zaloguj się, aby kontynuować.</p>
+    {% if blad %}<p class="blad">{{ blad }}</p>{% endif %}
+    <label>Login
+      <input name="login" required autofocus autocomplete="username">
+    </label>
+    <label>Hasło
+      <input type="password" name="haslo" required autocomplete="current-password">
+    </label>
+    <button type="submit">Zaloguj się</button>
+  </form>
+</body>
+</html>

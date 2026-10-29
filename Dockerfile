@@ -30,11 +30,11 @@ COPY templates/ templates/
 USER appuser
 
 # Domyślnie serwer panelu (batch nowych PDF-ów robi na starcie).
-# Jednorazowy batch/eksport bez panelu — serwis "cykl" w compose
-# albo: docker run ... <obraz> python weryfikator.py
+# Jednorazowy przebieg weryfikatora bez panelu (np. diagnostyka):
+#   docker run --rm ... <obraz> python weryfikator.py
 CMD ["python", "panel.py"]
 
-# Zdrowie = panel odpowiada na API. start-period dłuższy, bo przy
-# starcie z nowymi PDF-ami panel najpierw robi batch (wolne API).
+# Zdrowie = panel odpowiada. /healthz zamiast /api/faktury: dane panelu
+# wymagają zalogowania, healthcheck ma tylko stwierdzić, że proces żyje.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/faktury', timeout=3)" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=3)" || exit 1

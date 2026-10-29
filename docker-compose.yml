@@ -1,14 +1,13 @@
 # Omega Faktury — serwer na VPS (lub lokalnie).
 #
-#   docker compose up -d            # start panelu (http://localhost:5000)
+#   docker compose up -d            # start: panel + caddy (https, port 443)
 #                                   # + monitoringu (monitor, patrz niżej)
-#   docker compose run --rm cykl    # jednorazowo: nowe PDF-y + eksport XML
 #   docker compose run --rm straznik  # raport dzienny (crontab o 20:00)
 #   docker compose logs -f panel    # podgląd logów
 #   docker compose down             # stop (dane w ./data przeżywają)
 #
-# Serwisy "cykl" i "straznik" mają profiles, więc NIE startują razem
-# z "up" — to narzędzia uruchamiane ręcznie. Volume ./data (PDF-y, baza
+# Serwis "straznik" ma profiles, więc NIE startuje razem z "up" —
+# to narzędzie uruchamiane ręcznie. Volume ./data (PDF-y, baza
 # SQLite) i ./przetworzone (eksport XML + PDF-y) współdzielone.
 services:
   panel:
@@ -18,28 +17,39 @@ services:
     env_file: .env               # GEMINI_API_KEY — tylko tu, nigdy w obrazie
     environment:
       - BEZ_PRZEGLADARKI=1       # w kontenerze nie ma przeglądarki
-      - PANEL_HOST=0.0.0.0       # Flask ma słuchać też spoza kontenera
+      - PANEL_HOST=0.0.0.0       # Flask ma słuchać w sieci compose
+      - PANEL_ZA_PROXY=1         # włącza ProxyFix (IP klienta od Caddy)
     volumes:
       - ./data:/app/data
       - ./przetworzone:/app/przetworzone
-    ports:
-      - "5000:5000"
+    # celowo BEZ "ports" — z zewnątrz panel jest osiągalny wyłącznie
+    # przez caddy (https, port 443); port 5000 istnieje tylko w sieci
+    # compose (monitor odpyta go po imieniu serwisu)
     logging:
       driver: json-file          # rotacja logów, żeby nie zjadły dysku
       options: { max-size: "10m", max-file: "3" }
 
-  cykl:
-    image: omega-faktury         # ten sam obraz (buduje go serwis panel)
-    profiles: ["narzedzia"]      # uruchamiany tylko ręcznie (run --rm)
-    env_file: .env
+  # Jedyny wystawiony na świat port: 443. Caddy kończy TLS (certyfikat
+  # samopisany "tls internal" — bez domeny) i proxyuje do panelu.
+  # Wymaga ADRES_VPS w .env (patrz Caddyfile). Certyfikaty trzymają się
+  # w nazwanym volume — bez tego każdy restart to nowy certyfikat
+  # i ostrzeżenie przeglądarki od nowa.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      - ADRES_VPS=${ADRES_VPS}
+    ports:
+      - "443:443"
     volumes:
-      - ./data:/app/data
-      - ./przetworzone:/app/przetworzone
-    # Kolejność celowa: gdy weryfikator padnie (brak klucza/PDF-ów wychodzi
-    # z niezerowym kodem), && nie dopuści do eksportu. Do XML trafiają
-    # faktury bez błędów walidacji; ręcznie zatwierdzone eksportuje
-    # księgowa z panelu (dostają tam status "wyeksportowane").
-    command: sh -c "python weryfikator.py && python eksport.py do_zatwierdzenia"
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - dane_caddy:/data
+      - konfig_caddy:/config
+    depends_on:
+      - panel
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   # Monitoring — znak życia co 15 min (dead man's switch). Monitor
   # odpytuje panel od zewnątrz tak jak przeglądarka księgowej; ping do
@@ -54,6 +64,11 @@ services:
       - MONITOR_URL=http://panel:5000
     depends_on:
       - panel
+    # obraz dziedziczy HEALTHCHECK panelu (probe :5000) — w kontenerze
+    # monitora nic nie nasłuchuje i byłby wiecznie "unhealthy"; życiem
+    # monitora zajmuje się Healthchecks.io (brak pingów = alert):
+    healthcheck:
+      disable: true
 
   # Strażnik dzienny (raport + alerty) — uruchamiany crontabem hosta:
   #   0 20 * * * cd /sciezka/do/projektu && docker compose run --rm straznik
@@ -66,3 +81,9 @@ services:
     volumes:
       - ./data:/app/data
       - ./logi:/app/logi
+
+# Certyfikaty/wewnętrzny stan Caddy — nazwane volumeny, żeby nie były
+# w katalogu projektu (Caddy pisze jako root wewnątrz kontenera):
+volumes:
+  dane_caddy:
+  konfig_caddy:

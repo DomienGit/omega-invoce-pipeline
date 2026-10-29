@@ -20,6 +20,8 @@ Zmienne środowiskowe (wszystkie opcjonalne):
   HEALTHCHECKS_URL   adres pingu checki z healthchecks.io; puste =
                      tryb lokalny (tylko logi, nic nie wychodzi)
   MONITOR_CZAS       odstęp między odpytaniami w sekundach, domyślnie 900
+  PANEL_TOKEN        token logowania panelu (ten sam co w .env panelu);
+                     wymagany, gdy panel ma włączoną autoryzację
 """
 
 import json
@@ -44,8 +46,12 @@ def stan_panelu() -> str:
     Rzuca wyjątkiem (timeout, kod != 200), gdy panel nie odpowiada —
     wtedy ping NIE wychodzi i to jest właśnie mechanizm alarmu.
     """
-    with urllib.request.urlopen(f"{URL_PANELU}/api/faktury",
-                                timeout=10) as odp:
+    zadanie = urllib.request.Request(f"{URL_PANELU}/api/faktury")
+    # panel wymaga zalogowania — monitor przedstawia się tokenem:
+    if os.environ.get("PANEL_TOKEN"):
+        zadanie.add_header("Authorization",
+                           f"Bearer {os.environ['PANEL_TOKEN']}")
+    with urllib.request.urlopen(zadanie, timeout=10) as odp:
         dane = json.loads(odp.read())
     faktury = dane["faktury"]
     przetworzone = sum(1 for f in faktury

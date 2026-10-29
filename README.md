@@ -8,30 +8,65 @@ z kluczem `GEMINI_API_KEY` w katalogu projektu (klucz nigdy nie trafia
 do obrazu — przekazuje go compose przy starcie).
 
 ```bash
-docker compose up -d        # start serwera (panel + baza)
+docker compose up -d        # start serwera (panel + baza + caddy)
 ```
 
-- **Panel:** `http://localhost:5000` (z innego komputera w sieci:
-  `http://IP-serwera:5000`). Na starcie serwer sam dokańcza kolejkę
+- **Panel:** `https://localhost` (z innego komputera: `https://IP-serwera`).
+  Port 443, ruch kończy Caddy (HTTPS). Panel wymaga zalogowania — patrz
+  sekcja „Logowanie i HTTPS" niżej. Na starcie serwer sam dokańcza kolejkę
   faktur przerwanych przy restarcie.
 - **Faktury:** księgowa wgrywa PDF-y w panelu („Wybierz faktury…" /
   „Wybierz folder…") — każdy plik od razu dostaje wiersz w kolejce
   (zakładka „Do przetworzenia") i jest przetwarzany w tle. Folder
   `./data/` to tylko magazyn plików, nie skanujemy go w poszukiwaniu
   nowych faktur.
-- **Batch + eksport XML** (jednorazowo, bez dotykania działającego panelu):
-
-```bash
-docker compose run --rm cykl    # przetwarza kolejkę z bazy + pisze przetworzone/eksport.xml
-```
-
 - **Logi:** `docker compose logs -f panel`
 - **Stop:** `docker compose down` (dane w `./data/` i `./przetworzone/`
   zostają na dysku — to volume, nie część obrazu)
 
-**Uwaga (VPS):** panel nie ma jeszcze logowania — wystawiony na publiczny
-IP jest dostępny dla każdego, kto zna adres. Do czasu dodania autoryzacji
-ogranicz dostęp (VPN typu Tailscale albo reguła firewall na porcie 5000).
+## Logowanie i HTTPS
+
+Panel stoi za Caddy, który jako **jedyne okno na świat** kończy TLS
+certyfikatem samopisanym (nie mamy domeny — bez niej Let's Encrypt
+nie wystawi certyfikatu). Skutki praktyczne:
+
+- cały ruch (hasło, faktury, PDF-y) jest szyfrowany tak samo jak
+  przy „prawdziwym" certyfikacie,
+- przy pierwszym wejściu przeglądarka pokaże ostrzeżenie o nieznanym
+  wystawcy — kliknij „Zaawansowane → Przejdź na stronę" (raz na
+  urządzenie; jeśli kiedyś doszedłbyś do domeny, wymiana na darmowy
+  certyfikat to jedna linia w `Caddyfile`),
+- port 5000 panelu nie istnieje z zewnątrz — jedyny otwarty port to 443.
+
+Konta (login + **hash** hasła, nigdy jawne hasło) i pozostałe sekrety
+mieszkają w `.env` (szablon: `.env.example`). Trzy generatory:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"    # SECRET_KEY (sesje)
+python -c "import secrets; print(secrets.token_urlsafe(32))" # PANEL_TOKEN (monitor)
+python -c "from werkzeug.security import generate_password_hash as g; print('ksiegowa=' + g(input('Hasło: ')))"
+# ^ uruchom dla każdego konta, wyniki sklej średnikiem w PANEL_KONTA
+```
+
+Efekt w `.env` wygląda tak (hasze przykładowe):
+
+```
+SECRET_KEY=64 znaki hex...
+PANEL_TOKEN=43 znaki urlsafe...
+PANEL_KONTA=ksiegowa=scrypt:32768:8:1$abc...$def...;wlasciciel=scrypt:32768:8:1$...
+ADRES_VPS=203.0.113.10
+```
+
+Zasady bezpieczeństwa wbudowane w kod: 5 błędnych logowań z jednego
+IP = 15 minut blokady; sesja wygasa po 8 h; ciasteczko HttpOnly
+i SameSite=Lax; każdy endpoint (także API i PDF-y) przechodzi przez
+tę samą bramę — wylogowany nie dobierze się do danych nawet `curl`-em.
+Monitor loguje się tokenem (`PANEL_TOKEN`), HEALTHCHECK Dockera używa
+publicznego `/healthz` (sama informacja „żyje", bez danych).
+
+Puste `PANEL_KONTA` = logowanie wyłączone (tryb deweloperski —
+`python desktop.py` lokalnie działa bez hasła). Na serwerze zawsze
+ustawione.
 
 ## Monitoring (czy aplikacja żyje na serwerze)
 
