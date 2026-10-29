@@ -53,9 +53,22 @@ Efekt w `.env` wygląda tak (hasze przykładowe):
 ```
 SECRET_KEY=64 znaki hex...
 PANEL_TOKEN=43 znaki urlsafe...
-PANEL_KONTA=ksiegowa=scrypt:32768:8:1$abc...$def...;wlasciciel=scrypt:32768:8:1$...
+PANEL_KONTA='ksiegowa=scrypt:32768:8:1$abc...$def...;wlasciciel=scrypt:32768:8:1$...'
 ADRES_VPS=203.0.113.10
 ```
+
+`PANEL_KONTA` musi być w **pojedynczych** cudzysłowach — hash werkzeuga
+zawiera `$`, a docker compose w wartościach bez cudzysłowów i w podwójnych
+cudzysłowach traktuje `$coś` jako zmienną i zamienia ją na pusty ciąg
+(hash się psuje i logowanie odrzuca dobre hasło). Pojedyncze cudzysłowy
+są dla compose i python-dotenv wartością dosłowną.
+
+`ADRES_VPS` to IP, pod którym panel jest osiągalny: na VPS-ie jego
+publiczne IP, lokalnie `127.0.0.1`. Uwaga na testy „na własnym
+komputerze z własnym publicznym IP": większość domowych łączy (CGNAT)
+nie pozwala wrócić do własnej maszyny przez ten adres — lokalnie
+zawsze `127.0.0.1`, a w przeglądarce wchodź na `https://127.0.0.1`
+dokładnie (nie na `https://localhost`, bo caddy dopasowuje adres).
 
 Zasady bezpieczeństwa wbudowane w kod: 5 błędnych logowań z jednego
 IP = 15 minut blokady; sesja wygasa po 8 h; ciasteczko HttpOnly

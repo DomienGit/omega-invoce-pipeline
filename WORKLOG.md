@@ -342,3 +342,45 @@
     panelu (connection refused w logach, nieszkodliwe — nastepna proba
     za 15 min, grace Healthchecks 45 min).
 }
+
+29-10-2026 {
+    Pierwszy lokalny odpal calej sterty przez compose ("wpisalem
+    sekrety i nie chce sie zaladowac") — dwie wady w .env:
+    - nazwa zmiennej IP_ADDRESS zamiast ADRES_VPS: caddy nie dostawal
+      adresu (pusty {$ADRES_VPS}) i zapetlal sie w restartach, na 443
+      nic nie nasluchiwalo
+    - PANEL_KONTA w PODWOJNYCH cudzyslowach: docker compose (v2.39)
+      w wartosciach bez cudzyslowow i w podwojnych traktuje '$cos'
+      jak zmienna i czysci je — z hasha scrypt...$sol$hash zostawalo
+      25 pierwszych znakow, logowanie odrzucaloby kazde haslo.
+      Macierz testow (/tmp/test-env, printenv w kontenerze vs
+      dotenv_values) rozstrzygnela zapis: POJEDYNCZE cudzyslowy sa
+      doslowne zarowno dla compose env_file jak i python-dotenv
+      (uzywanego lokalnie przez panel.py) — 'login=hash;...' przechodzi
+      w obu swiatach bez zmian w kodzie; podwojne cudzyslowy i zapis
+      goly psuja kontener, '$$' nie da sie pogodzic z python-dotenv
+    - ADRES_VPS: publiczne IP domowego lacza (CGNAT) nie wraca do
+      wlasnej maszyny (timeout), a https://127.0.0.1 przy site
+      ustawionym na IP dawal pusta 200 od caddy (niezgodny Host) —
+      lokalnie ADRES_VPS=127.0.0.1 i wchodzic na https://127.0.0.1
+
+    Testy po naprawie (--force-recreate, bez niego compose nie widzi
+    zmian env_file): kontenery stably up + panel healthy; hash w
+    kontenerze caly (171 znakow, 2 dolary, 1 konto); przez caddy:
+    / -> 302 /login, /api/faktury -> 401 JSON, z Bearerem -> 200,
+    /login -> 200; pelne logowanie E2E na przy tymczasowym koncie
+    testowym (dodanym do PANEL_KONTA na czas testu, potem usunietym):
+    zle haslo 401, dobre 302 + cookie HttpOnly/Expires +8 h, sesja
+    otwiera API, wylogowanie odsyla Set-Cookie kasujace (Expires=1970,
+    Max-Age=0). Dwie obserwacje: (1) curl NIE kasuje cookie z jaru przy
+    takim Set-Cookie (artefakt curla, przegladarki kasuja poprawnie);
+    (2) sesja Flaska jest klientowa, wiec wylogowanie nie uniewaznia
+    skradzionej kopii cookie przed uplywem 8 h — wlasciwosc frameworka,
+    przy HttpOnly+HTTPS akceptowana dla dwuosobowej aplikacji
+    (zapisane tu, zeby nie szukac "buga" w przyszlosci).
+
+    Dokumentacja: README + .env.example pokazuja PANEL_KONTA w
+    pojedynczych cudzyslowach z wyjasnieniem interpolacji '$'; README
+    opisuje tez ADRES_VPS lokalnie (127.0.0.1) vs VPS (publiczne IP)
+    i pulapke CGNAT.
+}
