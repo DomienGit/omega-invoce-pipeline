@@ -1,2 +1,5 @@
 .env
 logi/
+__pycache__/
+data/
+przetworzone/
