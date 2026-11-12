@@ -57,6 +57,10 @@ services:
   # panel = cisza = mail z Healthchecks (okno ustawiasz w jego UI).
   monitor:
     image: omega-faktury
+    # build też tutaj: na świeżej maszynie obraz jeszcze nie istnieje,
+    # a bez sekcji build compose próbowałby go POBRAĆ z Docker Huba
+    # (tam go nie ma — to nasz obraz z lokalnego Dockerfile)
+    build: .
     restart: unless-stopped
     command: python monitor.py    # bez tego wystartowałby panel (domyślne CMD)
     env_file: .env
@@ -75,6 +79,7 @@ services:
   # Alerty progowe pinguje jako /fail (natychmiastowy mail z Healthchecks).
   straznik:
     image: omega-faktury
+    build: .                   # jw. — obraz lokalny, nie z Docker Huba
     profiles: ["narzedzia"]
     command: python straznik.py   # bez tego wystartowałby panel (domyślne CMD)
     env_file: .env

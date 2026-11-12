@@ -384,3 +384,22 @@
     opisuje tez ADRES_VPS lokalnie (127.0.0.1) vs VPS (publiczne IP)
     i pulapke CGNAT.
 }
+
+
+12-11-2026 {
+    build: . dopisane do serwisów monitor i straznik (docker-compose.yml).
+    Dotąd obraz omega-faktury budował wyłącznie serwis panel, a monitor
+    i straznik miały samą sekcję image: — na świeżej maszynie, gdzie
+    obrazu jeszcze nie ma, compose próbowałby go POBRAĆ z Docker Huba
+    (tam go nie ma — to nasz obraz z lokalnego Dockerfile) i kończył
+    się błędem pull. Teraz każdy serwis korzystający z tego obrazu
+    potrafi go zbudować sam; przy zwykłym `docker compose up -d --build`
+    nic się nie zmienia, bo build z tego samego Dockerfile ląduje pod
+    wspólnym tagiem omega-faktury. Scenariusz, którego to zabezpiecza:
+    `docker compose run --rm straznik` (crontab 20:00) albo start
+    monitora na maszynie, na której panel nigdy nie został zbudowany.
+
+    Kontekst: 30-10 na origin doszedł deploy.yml (GitHub Actions:
+    push do main -> SSH na VPS -> git pull + docker compose up -d
+    --build), commity zaciągnięte lokalnie przy okazji (fast-forward).
+}
