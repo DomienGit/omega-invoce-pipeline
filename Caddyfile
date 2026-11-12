@@ -1,21 +1,15 @@
-# Caddy — jedyne okno na świat: kończy TLS (certyfikat samopisany,
-# bo nie mamy domeny) i przekazuje ruch do panelu w sieci compose.
+# Caddy — jedyne okno na świat: kończy TLS i przekazuje ruch do panelu
+# w sieci compose.
 #
-# {$ADRES_VPS} = adres z .env (IP VPS-a; lokalnie do testów 127.0.0.1),
-# dzięki temu plik jest taki sam na maszynie deweloperskiej i serwerze.
-{
-	# brak domeny = brak ACME; wyłączamy też przekierowania HTTP→HTTPS,
-	# żeby Caddy nie chciał nasłuchiwać na porcie 80:
-	auto_https disable_redirects
-	# przeglądarki NIE wysyłają SNI dla adresów IP — bez tej opcji Caddy
-	# nie umiałby dobrać certyfikatu i handshake kończył się błędem:
-	default_sni {$ADRES_VPS}
-}
-
-https://{$ADRES_VPS}:443 {
-	# certyfikat wystawiony przez wbudowane CA Caddy (SAN na adres IP);
-	# przeglądarka pokaże ostrzeżenie — raz na urządzenie klikamy
-	# "przejdź mimo to". Certyfikaty trzymają się w volume dane_caddy.
-	tls internal
+# {$DOMENA} = nazwa z .env. Na VPS jest to prawdziwa domena (np.
+# omega-faktury.duckdns.org) — Caddy sam pobiera certyfikat
+# Let's Encrypt (wyzwanie HTTP-01 na porcie 80) i odnawia go co ~60 dni.
+# Lokalnie do testów DOMENA=localhost — dla localhost Caddy wystawia
+# certyfikat ze swojego CA (bez ACME), przeglądarka ostrzeże tylko
+# w testach lokalnych.
+#
+# Port 80 służy wyzwaniu ACME i przekierowaniu http->https — dlatego
+# jest wystawiony w docker-compose.yml obok 443.
+{$DOMENA} {
 	reverse_proxy panel:5000
 }

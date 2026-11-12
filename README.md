@@ -11,10 +11,10 @@ do obrazu — przekazuje go compose przy starcie).
 docker compose up -d        # start serwera (panel + baza + caddy)
 ```
 
-- **Panel:** `https://localhost` (z innego komputera: `https://IP-serwera`).
-  Port 443, ruch kończy Caddy (HTTPS). Panel wymaga zalogowania — patrz
-  sekcja „Logowanie i HTTPS" niżej. Na starcie serwer sam dokańcza kolejkę
-  faktur przerwanych przy restarcie.
+- **Panel:** `https://` + twoja domena z `.env` (`DOMENA`; lokalnie po
+  prostu `https://localhost`). Ruch kończy Caddy (HTTPS na 443). Panel
+  wymaga zalogowania — patrz sekcja „Logowanie i HTTPS" niżej. Na starcie
+  serwer sam dokańcza kolejkę faktur przerwanych przy restarcie.
 - **Faktury:** księgowa wgrywa PDF-y w panelu („Wybierz faktury…" /
   „Wybierz folder…") — każdy plik od razu dostaje wiersz w kolejce
   (zakładka „Do przetworzenia") i jest przetwarzany w tle. Folder
@@ -27,16 +27,17 @@ docker compose up -d        # start serwera (panel + baza + caddy)
 ## Logowanie i HTTPS
 
 Panel stoi za Caddy, który jako **jedyne okno na świat** kończy TLS
-certyfikatem samopisanym (nie mamy domeny — bez niej Let's Encrypt
-nie wystawi certyfikatu). Skutki praktyczne:
+certyfikatem Let's Encrypt (na VPS domena wskazuje na IP serwera —
+Caddy sam pobiera i odnawia certyfikat; wyzwanie ACME odbywa się
+na porcie 80, tam też trafia przekierowanie http→https). Skutki
+praktyczne:
 
-- cały ruch (hasło, faktury, PDF-y) jest szyfrowany tak samo jak
-  przy „prawdziwym" certyfikacie,
-- przy pierwszym wejściu przeglądarka pokaże ostrzeżenie o nieznanym
-  wystawcy — kliknij „Zaawansowane → Przejdź na stronę" (raz na
-  urządzenie; jeśli kiedyś doszedłbyś do domeny, wymiana na darmowy
-  certyfikat to jedna linia w `Caddyfile`),
-- port 5000 panelu nie istnieje z zewnątrz — jedyny otwarty port to 443.
+- cały ruch (hasło, faktury, PDF-y) jest szyfrowany, a przeglądarka
+  nie pokazuje ostrzeżeń — certyfikat jest „prawdziwy",
+- lokalnie (`DOMENA=localhost`) Caddy wystawia certyfikat ze swojego
+  CA — ostrzeżenie o nieznanym wystawcy dotyczy wyłącznie testów
+  lokalnych,
+- port 5000 panelu nie istnieje z zewnątrz — otwarte są tylko 80 i 443.
 
 Konta (login + **hash** hasła, nigdy jawne hasło) i pozostałe sekrety
 mieszkają w `.env` (szablon: `.env.example`). Trzy generatory:
@@ -54,7 +55,7 @@ Efekt w `.env` wygląda tak (hasze przykładowe):
 SECRET_KEY=64 znaki hex...
 PANEL_TOKEN=43 znaki urlsafe...
 PANEL_KONTA='ksiegowa=scrypt:32768:8:1$abc...$def...;wlasciciel=scrypt:32768:8:1$...'
-ADRES_VPS=203.0.113.10
+DOMENA=omega-faktury.duckdns.org
 ```
 
 `PANEL_KONTA` musi być w **pojedynczych** cudzysłowach — hash werkzeuga
@@ -63,12 +64,12 @@ cudzysłowach traktuje `$coś` jako zmienną i zamienia ją na pusty ciąg
 (hash się psuje i logowanie odrzuca dobre hasło). Pojedyncze cudzysłowy
 są dla compose i python-dotenv wartością dosłowną.
 
-`ADRES_VPS` to IP, pod którym panel jest osiągalny: na VPS-ie jego
-publiczne IP, lokalnie `127.0.0.1`. Uwaga na testy „na własnym
-komputerze z własnym publicznym IP": większość domowych łączy (CGNAT)
-nie pozwala wrócić do własnej maszyny przez ten adres — lokalnie
-zawsze `127.0.0.1`, a w przeglądarce wchodź na `https://127.0.0.1`
-dokładnie (nie na `https://localhost`, bo caddy dopasowuje adres).
+`DOMENA` to nazwa, pod którą panel jest osiągalny: na VPS-ie domena
+wskazująca na jego publiczne IP (u nas darmowa `omega-faktury.duckdns.org`
+z Duck DNS — wpis A ustawiony raz, IP serwera jest stałe), lokalnie
+`localhost`. W przeglądarce wchodź dokładnie na tę nazwę (Caddy
+dopasowuje adres), czyli na serwerze `https://omega-faktury.duckdns.org`,
+a w testach lokalnych `https://localhost`.
 
 Zasady bezpieczeństwa wbudowane w kod: 5 błędnych logowań z jednego
 IP = 15 minut blokady; sesja wygasa po 8 h; ciasteczko HttpOnly

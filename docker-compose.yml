@@ -29,17 +29,18 @@ services:
       driver: json-file          # rotacja logów, żeby nie zjadły dysku
       options: { max-size: "10m", max-file: "3" }
 
-  # Jedyny wystawiony na świat port: 443. Caddy kończy TLS (certyfikat
-  # samopisany "tls internal" — bez domeny) i proxyuje do panelu.
-  # Wymaga ADRES_VPS w .env (patrz Caddyfile). Certyfikaty trzymają się
-  # w nazwanym volume — bez tego każdy restart to nowy certyfikat
-  # i ostrzeżenie przeglądarki od nowa.
+  # Okno na świat: porty 443 (https, ruch do panelu) i 80 (wyzwanie
+  # ACME dla certyfikatu Let's Encrypt + przekierowanie http->https).
+  # Domena przychodzi z .env jako DOMENA (patrz Caddyfile). Certyfikaty
+  # trzymają się w nazwanym volume — bez tego każdy restart to nowy
+  # certyfikat.
   caddy:
     image: caddy:2
     restart: unless-stopped
     environment:
-      - ADRES_VPS=${ADRES_VPS}
+      - DOMENA=${DOMENA}
     ports:
+      - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

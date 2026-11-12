@@ -403,3 +403,35 @@
     push do main -> SSH na VPS -> git pull + docker compose up -d
     --build), commity zaciągnięte lokalnie przy okazji (fast-forward).
 }
+
+
+12-11-2026 (2) {
+    Domena Duck DNS + prawdziwy certyfikat Let's Encrypt (koniec
+    certyfikatu samopisanego z SAN na IP):
+    - domena omega-faktury.duckdns.org (darmowa, Duck DNS) wskazuje
+      na IP VPS-a (37.31.10.10), wpis A ustawiony ręcznie — IP serwera
+      jest stałe, celowo NIE dodaliśmy kontenera-updatera (dyskusja
+      przed kodem: mniej serwisów i sekretów; updater można dopisać,
+      gdyby IP kiedyś się zmieniał)
+    - Caddyfile: adres strony to teraz {$DOMENA} z .env; wypadły wszystkie
+      obejścia braku domeny — tls internal, default_sni (SNI działa
+      dla domen), auto_https disable_redirects. Na VPS DOMENA=
+      omega-faktury.duckdns.org -> Caddy sam pobiera i odnawia cert
+      Let's Encrypt (wyzwanie HTTP-01 na porcie 80); lokalnie DOMENA=
+      localhost -> Caddy wystawia cert ze swojego CA (ostrzeżenie
+      przeglądarki dotyczy już tylko testów lokalnych)
+    - compose: caddy wystawia port 80 (ACME + przekierowanie http->https)
+      obok 443; ADRES_VPS w .env/.env.example zastąpione przez DOMENA
+      — razem z pułapką CGNAT z 29-10, bo koniec z wchodzeniem po IP
+    - README: sekcja "Logowanie i HTTPS" przepisana (prawdziwy cert,
+      porty 80+443), .env.example z DOMENA
+
+    Testy: compose lokalnie z DOMENA=localhost (port 80 na hoście
+    zajęty -> tymczasowy override 8080:80, potem usunięty): panel
+    healthy, caddy pobral cert "Caddy Local Authority" z SAN
+    DNS:localhost, http://...:8080 -> 308 https://localhost/,
+    https -> 302 /login, /api/faktury przez caddy -> 401 (brama auth
+    działa za proxy). Ostrzeżenie curla o lokalnym CA — oczekiwane,
+    dotyczy tylko testow. PRZED deployem na VPS: dopisac DOMENA do
+    .env na serwerze i upewnic sie, ze port 80 jest otwarty.
+}
