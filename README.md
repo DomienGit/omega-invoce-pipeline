@@ -11,10 +11,11 @@ do obrazu — przekazuje go compose przy starcie).
 docker compose up -d        # start serwera (panel + baza + caddy)
 ```
 
-- **Panel:** `https://` + twoja domena z `.env` (`DOMENA`; lokalnie po
-  prostu `https://localhost`). Ruch kończy Caddy (HTTPS na 443). Panel
-  wymaga zalogowania — patrz sekcja „Logowanie i HTTPS" niżej. Na starcie
-  serwer sam dokańcza kolejkę faktur przerwanych przy restarcie.
+- **Panel:** `https://` + twoja domena z `.env` (`DOMENA`) + port 8443,
+  lokalnie po prostu `https://localhost:8443`. Ruch kończy Caddy (HTTPS).
+  Panel wymaga zalogowania — patrz sekcja „Logowanie i HTTPS" niżej.
+  Na starcie serwer sam dokańcza kolejkę faktur przerwanych
+  przy restarcie.
 - **Faktury:** księgowa wgrywa PDF-y w panelu („Wybierz faktury…" /
   „Wybierz folder…") — każdy plik od razu dostaje wiersz w kolejce
   (zakładka „Do przetworzenia") i jest przetwarzany w tle. Folder
@@ -27,17 +28,22 @@ docker compose up -d        # start serwera (panel + baza + caddy)
 ## Logowanie i HTTPS
 
 Panel stoi za Caddy, który jako **jedyne okno na świat** kończy TLS
-certyfikatem Let's Encrypt (na VPS domena wskazuje na IP serwera —
-Caddy sam pobiera i odnawia certyfikat; wyzwanie ACME odbywa się
-na porcie 80, tam też trafia przekierowanie http→https). Skutki
-praktyczne:
+certyfikatem Let's Encrypt. Wyzwanie ACME to DNS-01: Caddy sam zakłada
+rekord TXT `_acme-challenge.<domena>` przez API Duck DNS (token
+`DUCKDNS_TOKEN` w `.env`) — dzięki temu certyfikat nie wymaga portów
+80/443, które na serwerze zajęte są przez inną aplikację. Panel jest
+osiągalny na porcie 8443: `https://omega-faktury.duckdns.org:8443`.
+Skutki praktyczne:
 
 - cały ruch (hasło, faktury, PDF-y) jest szyfrowany, a przeglądarka
   nie pokazuje ostrzeżeń — certyfikat jest „prawdziwy",
 - lokalnie (`DOMENA=localhost`) Caddy wystawia certyfikat ze swojego
   CA — ostrzeżenie o nieznanym wystawcy dotyczy wyłącznie testów
-  lokalnych,
-- port 5000 panelu nie istnieje z zewnątrz — otwarte są tylko 80 i 443.
+  lokalnych (`DUCKDNS_TOKEN` może być wtedy pusty),
+- port 5000 panelu nie istnieje z zewnątrz — otwarty jest tylko 8443
+  (TCP; plus UDP dla HTTP/3),
+- obraz Caddy budujemy sami (`Dockerfile.caddy` z modułem duckdns),
+  bo standardowy `caddy:2` nie wspiera wyzwania DNS-01.
 
 Konta (login + **hash** hasła, nigdy jawne hasło) i pozostałe sekrety
 mieszkają w `.env` (szablon: `.env.example`). Trzy generatory:
@@ -56,6 +62,7 @@ SECRET_KEY=64 znaki hex...
 PANEL_TOKEN=43 znaki urlsafe...
 PANEL_KONTA='ksiegowa=scrypt:32768:8:1$abc...$def...;wlasciciel=scrypt:32768:8:1$...'
 DOMENA=omega-faktury.duckdns.org
+DUCKDNS_TOKEN=token z duckdns.org
 ```
 
 `PANEL_KONTA` musi być w **pojedynczych** cudzysłowach — hash werkzeuga
@@ -67,9 +74,10 @@ są dla compose i python-dotenv wartością dosłowną.
 `DOMENA` to nazwa, pod którą panel jest osiągalny: na VPS-ie domena
 wskazująca na jego publiczne IP (u nas darmowa `omega-faktury.duckdns.org`
 z Duck DNS — wpis A ustawiony raz, IP serwera jest stałe), lokalnie
-`localhost`. W przeglądarce wchodź dokładnie na tę nazwę (Caddy
-dopasowuje adres), czyli na serwerze `https://omega-faktury.duckdns.org`,
-a w testach lokalnych `https://localhost`.
+`localhost`. Panel słucha na porcie 8443 — w przeglądarce wchodź
+dokładnie na tę nazwę z portem, czyli na serwerze
+`https://omega-faktury.duckdns.org:8443`, a w testach lokalnych
+`https://localhost:8443` (Caddy dopasowuje adres, także z portem).
 
 Zasady bezpieczeństwa wbudowane w kod: 5 błędnych logowań z jednego
 IP = 15 minut blokady; sesja wygasa po 8 h; ciasteczko HttpOnly

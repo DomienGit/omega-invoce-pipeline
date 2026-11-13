@@ -435,3 +435,56 @@
     dotyczy tylko testow. PRZED deployem na VPS: dopisac DOMENA do
     .env na serwerze i upewnic sie, ze port 80 jest otwarty.
 }
+
+
+13-11-2026 {
+    Przebudowa TLS na wyzwanie DNS-01 + panel na porcie 8443 (porty
+    80/443 na VPS zajęte przez inną aplikację użytkownika):
+    - deploy wczorajszej zmiany (HTTP-01, porty 80+443) zawiódł
+      na "Bind for 0.0.0.0:443 failed: port is already allocated" —
+      porty 80/443 są na stałe zajęte przez drugą aplikację na tym
+      samym hoście (decyzja użytkownika: tamta aplikacja zostaje,
+      my się przenosimy). Panel i monitor działają w sieci compose,
+      ale dostęp z zewnątrz przez caddy nie istnieje. Przy okazji
+      wykryty ślepy punkt monitoringu: monitor odpyta panel WEWNĄTRZ
+      sieci compose, więc pad caddy'ego jest niewidoczny dla
+      Healthchecks (fix zaplanowany osobno: drugi check przez
+      https://caddy:8443/healthz).
+    - wyzwanie DNS-01: Caddy sam zakłada rekord TXT _acme-challenge.
+      <domena> przez API Duck DNS (DUCKDNS_TOKEN z .env) — certyfikat
+      Let's Encrypt bez portów 80/443, panel na https://<domena>:8443
+    - nowy Dockerfile.caddy: caddy:2-builder + xcaddy --with
+      github.com/caddy-dns/duckdns, binarka kopiowana do czystego
+      caddy:2. Własny build zamiast obrazu trzeciej strony (kontrola
+      nad supply chain); kompilacja tylko przy zmianie pliku, zwykłe
+      deploye cache'ują warstwy. Standardowy caddy:2 nie ma modułów
+      DNS i DNS-01 by nie potrafił.
+    - Caddyfile: globalna opcja acme_dns duckdns {env.DUCKDNS_TOKEN}
+      (celowo NIE blok tls per-site — blok tls z dns wymuszałby ACME
+      także dla localhost; globalna opcja zostawia localhost na
+      wewnętrznym CA bez żadnego DNS-u); auto_https disable_redirects
+      wróciło (bez portu 80 redirect niemożliwy, a próba nasłuchu
+      na 80 zapętla caddy w restartach); adres https://{$DOMENA}:8443
+    - compose: caddy budowany z Dockerfile.caddy (tag caddy-duckdns,
+      wzorzec jak omega-faktury), porty 8443 tcp+udp (udp = HTTP/3),
+      DUCKDNS_TOKEN przekazany SELEKTYWNIE przez environment (nie
+      env_file — caddy nie dostaje GEMINI_API_KEY/SECRET_KEY); token
+      duckdns kontroluje całe konto Duck DNS, traktujemy jak sekret
+    - .env.example: DUCKDNS_TOKEN z instrukcją; lokalnie pusty
+
+    Testy lokalne: caddy list-modules w zbudowanym obrazie pokazuje
+    dns.providers.duckdns; up -d z DOMENA=localhost i PUSTYM tokenem
+    — caddy startuje i działa (rozstrzygnięta wątpliwość z planu:
+    pusty placeholder w acme_dns nie rozbija przypadku localhost),
+    cert odnowiony z "Caddy Local Authority", SAN DNS:localhost, zero
+    prób ACME/DNS w logach; https://localhost:8443: /healthz 200,
+    /api/faktury 401, / 302 -> /login; brak restartów po minucie.
+    Zajętość portu 80 lokalnie przestała mieć znaczenie — caddy
+    w ogóle go nie dotyka. PRZED deployem na VPS: DUCKDNS_TOKEN w
+    .env na serwerze, otwarty port 8443 tcp(+udp) na firewallu,
+    8443 nie koliduje z drugą aplikacją; pierwszy build caddy na VPS
+    potrwa kilka minut (kompilacja). Weryfikacja po deploju: issuer
+    certu = Let's Encrypt (openssl s_client :8443), curl bez -k.
+    UWAGA: wczorajszy commit (HTTP-01) jest już na origin i jego
+    deploy nie działa — ten commit go zastępuje.
+}

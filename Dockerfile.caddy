@@ -1,0 +1,17 @@
+# Caddy z modułem DNS-01 dla Duck DNS (github.com/caddy-dns/duckdns,
+# oficjalna organizacja caddy-dns). Standardowy obraz caddy:2 nie zawiera
+# modułów DNS-Provider — bez nich nie ma wyzwania DNS-01, a ono jest nam
+# potrzebne, bo porty 80/443 na hoście zajęte są przez inną aplikację
+# (wyzwanie HTTP-01 wymaga portu 80).
+#
+# Build dwuetapowy: builder kompiluje binarkę xcaddy, docelowy obraz
+# dostaje wyłącznie ją. Własny build zamiast obrazu trzeciej strony =
+# pełna kontrola nad supply chain; kompilacja odpala się tylko przy
+# zmianie tego pliku (warstwy Dockera cache'ują resztę), więc zwykłe
+# deployy tego nie czują. Pierwszy build (świeży cache) potrwa kilka
+# minut — to normalne.
+FROM caddy:2-builder AS builder
+RUN xcaddy build --with github.com/caddy-dns/duckdns
+
+FROM caddy:2
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

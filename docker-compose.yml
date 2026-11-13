@@ -1,6 +1,6 @@
 # Omega Faktury — serwer na VPS (lub lokalnie).
 #
-#   docker compose up -d            # start: panel + caddy (https, port 443)
+#   docker compose up -d            # start: panel + caddy (https, port 8443)
 #                                   # + monitoringu (monitor, patrz niżej)
 #   docker compose run --rm straznik  # raport dzienny (crontab o 20:00)
 #   docker compose logs -f panel    # podgląd logów
@@ -29,19 +29,26 @@ services:
       driver: json-file          # rotacja logów, żeby nie zjadły dysku
       options: { max-size: "10m", max-file: "3" }
 
-  # Okno na świat: porty 443 (https, ruch do panelu) i 80 (wyzwanie
-  # ACME dla certyfikatu Let's Encrypt + przekierowanie http->https).
-  # Domena przychodzi z .env jako DOMENA (patrz Caddyfile). Certyfikaty
-  # trzymają się w nazwanym volume — bez tego każdy restart to nowy
-  # certyfikat.
+  # Okno na świat: https na porcie 8443 (80/443 na tym hoście zajęte
+  # przez inną aplikację). Certyfikat Let's Encrypt przez wyzwanie
+  # DNS-01 — rekord TXT zakładany API Duck DNS, stąd DUCKDNS_TOKEN
+  # przekazany TYLKO tutaj, selektywnie przez environment (caddy celowo
+  # nie dostaje całego .env z kluczem Gemini). Obraz budujemy sami
+  # (Dockerfile.caddy): standardowy caddy:2 nie ma modułu duckdns.
+  # Port udp obsługuje HTTP/3. Certyfikaty trzymają się w nazwanym
+  # volume — bez tego każdy restart to nowy certyfikat.
   caddy:
-    image: caddy:2
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: caddy-duckdns
     restart: unless-stopped
     environment:
       - DOMENA=${DOMENA}
+      - DUCKDNS_TOKEN=${DUCKDNS_TOKEN}
     ports:
-      - "80:80"
-      - "443:443"
+      - "8443:8443/tcp"
+      - "8443:8443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - dane_caddy:/data

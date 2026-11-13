@@ -1,15 +1,28 @@
 # Caddy — jedyne okno na świat: kończy TLS i przekazuje ruch do panelu
 # w sieci compose.
 #
-# {$DOMENA} = nazwa z .env. Na VPS jest to prawdziwa domena (np.
-# omega-faktury.duckdns.org) — Caddy sam pobiera certyfikat
-# Let's Encrypt (wyzwanie HTTP-01 na porcie 80) i odnawia go co ~60 dni.
-# Lokalnie do testów DOMENA=localhost — dla localhost Caddy wystawia
-# certyfikat ze swojego CA (bez ACME), przeglądarka ostrzeże tylko
-# w testach lokalnych.
+# TLS przez wyzwanie DNS-01: Caddy sam zakłada rekord TXT
+# _acme-challenge.<domena> API Duck DNS (DUCKDNS_TOKEN z .env, przekazany
+# selektywnie w docker-compose.yml) i dostaje prawdziwy certyfikat
+# Let's Encrypt — bez otwierania portów 80/443 (na tym hoście zajęte
+# przez inną aplikację; HTTP-01 odpada właśnie dlatego). Odnawianie
+# automatyczne co ~60 dni.
 #
-# Port 80 służy wyzwaniu ACME i przekierowaniu http->https — dlatego
-# jest wystawiony w docker-compose.yml obok 443.
-{$DOMENA} {
+# {$DOMENA} = nazwa z .env. Na VPS omega-faktury.duckdns.org, panel
+# osiągalny jako https://omega-faktury.duckdns.org:8443. Lokalnie
+# DOMENA=localhost — Caddy wystawia wtedy certyfikat ze swojego CA
+# (bez ACME i bez DNS), ostrzeżenie przeglądarki dotyczy tylko testów
+# lokalnych.
+{
+	# issuer ACME ma brać wyzwanie DNS-01 przez Duck DNS; token przychodzi
+	# środowiskiem (dla localhost nieistotny — tam nie ma ACME):
+	acme_dns duckdns {env.DUCKDNS_TOKEN}
+	# nie mamy portu 80, więc przekierowanie http->https jest niemożliwe;
+	# bez tej opcji Caddy próbowałby nasłuchiwać na 80 i zapętlał się
+	# w restartach (użytkownik i tak wchodzi od razu na https):
+	auto_https disable_redirects
+}
+
+https://{$DOMENA}:8443 {
 	reverse_proxy panel:5000
 }
