@@ -26,12 +26,13 @@ jobs:
 
       # 3. Właściwy deploy. && = każda kolejna komenda tylko, gdy poprzednia
       #    się udała; gdy coś padnie, ssh zwróci błąd i workflow czerwone.
-      #    caddy reload na końcu: Caddyfile jest bind-mountem, a compose
-      #    NIE odtwarza kontenera, gdy zmieni się tylko TREŚĆ montowanego
-      #    pliku — bez jawnego reloadu caddy działałoby dalej na starych
-      #    zasadach. Reload jest bez przerwy w działaniu; gdyby nowy
-      #    Caddyfile był zepsuty, reload zwróci błąd i deploy będzie
-      #    czerwony (stara konfiguracja zostaje aktywna).
+      #    Drugie "up" z --force-recreate caddy: Caddyfile jest montowany
+      #    jako POJEDYNCY PLIK, a Docker przy takim montowaniu trzyma się
+      #    inode, nie ścieżki — git pull wymienia plik na nowy, a kontener
+      #    dalej widzi stary (compose nie odtwarza kontenera, bo konfiguracja
+      #    serwisu się nie zmieniła; "caddy reload" też czyta stary mount i
+      #    kończy się "config is unchanged"). Odtworzenie kontenera jedyny
+      #    pewny sposób; koszt ~3 s przerwy w TLS, deployy są rzadkie.
       - name: Deploy na VPS
         run: |
-          ssh -i ~/.ssh/deploy_omega -o BatchMode=yes ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd ~/omega-invoce-pipeline && git pull && docker compose up -d --build && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile && docker image prune -f && docker compose ps'
+          ssh -i ~/.ssh/deploy_omega -o BatchMode=yes ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd ~/omega-invoce-pipeline && git pull && docker compose up -d --build && docker compose up -d --force-recreate caddy && docker image prune -f && docker compose ps'
