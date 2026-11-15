@@ -531,7 +531,7 @@
 
 15-11-2026 (2) {
     Pułapka deploy: caddy po zmianie Caddyfile działał dalej na
-    starych zasadach:
+    starych zasadach — i to dwukrotnie:
     - deploy #6 (monitor + front) wstawił nowy obraz panelu/monitora,
       ale caddy NIE został odtworzony — Caddyfile jest bind-mountem,
       a compose porównuje konfigurację serwisu (obraz, env, porty),
@@ -541,16 +541,27 @@
       potwierdzone openssl z zewnątrz), a nowy monitor słusznie
       przestał pingować — front realnie nie przechodził. Grace
       45 min dał czas na reakcję bez fałszywego maila.
-    - fix: deploy.yml po "up -d --build" robi jawny
-      "docker compose exec -T caddy caddy reload" — reload bez
-      przerwy w działaniu; bonus: zepsuty Caddyfile = reload
-      zwraca błąd = czerwony deploy (stara konfiguracja zostaje
-      aktywna), zamiast cichego dalszego działania po staremu
+    - pierwsza próba naprawy — "docker compose exec caddy reload"
+      w deploy.yml — okazała się NO-OPEM i to pouczającym: montowanie
+      POJEDYNCZEGO pliku trzyma się inode'a, nie ścieżki; git pull
+      wymienia plik na hostach na nowy, ale kontener nadal widzi
+      stary. Reload w środku kontenera porównał więc STARĄ treść
+      z działającą konfiguracją i odpowiedział "config is unchanged"
+      (widoczne w logach caddy przy POST /load). Deploy zielony,
+      a nic się nie zmieniło — najgorszy możliwy wariant, bo usypuje
+      czujność. Lekcja: zielony check potwierdza wykonanie komend,
+      nie ich skutek; weryfikować efekt (tu: SNI caddy z zewnątrz).
+    - fix właściwy: deploy.yml po "up -d --build" robi "docker compose
+      up -d --force-recreate caddy" — świeży kontener dostaje świeży
+      mount na nowy inode. Koszt ~3 s przerwy w TLS, deployy są
+      rzadkie; bonus: kontener startuje od zera z nową konfiguracją,
+      więc zepsuty Caddyfile wyrzuca go w restart-loop = czerwony
+      deploy, a nie ciche działanie po staremu
 
-    Testy: po pushu deploy zielony; SNI caddy z zewnątrz dostaje
-    cert "Caddy Local Authority" na nazwę caddy (przed fixem: pusto),
-    SNI domeny nadal Let's Encrypt, endpointy bez zmian (healthz 200,
-    / -> 302 login). Kolejny cykl monitora (do 15 min) wraca do
-    pingowania z "front: ok" w treści — potwierdzenie w historii
-    pingów Healthchecks.
+    Testy (po deploy #8): SNI caddy z zewnątrz dostaje cert
+    "Caddy Local Authority" (przed fixem handshake odrzucany),
+    healthz przez vhost sondy 200, domena główna bez zmian (healthz
+    200, / -> 302 login, Let's Encrypt do 2027-02-11). Kolejny cykl
+    monitora (do 15 min) wraca do pingowania z "front: ok" w treści
+    — potwierdzenie w historii pingów Healthchecks.
 }
