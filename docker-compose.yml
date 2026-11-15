@@ -74,6 +74,9 @@ services:
     env_file: .env
     environment:
       - MONITOR_URL=http://panel:5000
+      - MONITOR_URL_CADDY=https://caddy:8443   # check frontu (sonda bez
+      # weryfikacji certu — patrz monitor.py); pad caddy/certu/portu
+      # też odcina pingi, więc Healthchecks o tym krzyczy
     depends_on:
       - panel
     # obraz dziedziczy HEALTHCHECK panelu (probe :5000) — w kontenerze

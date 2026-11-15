@@ -26,3 +26,12 @@
 https://{$DOMENA}:8443 {
 	reverse_proxy panel:5000
 }
+
+# Sonda monitoringu: monitor (sieć compose) łączy się po wewnętrznej
+# nazwie serwisu "caddy", a SNI bez certyfikatu caddy odrzuca — ten blok
+# wystawia dla tej nazwy certyfikat wewnętrzny. Ten sam reverse_proxy
+# co na górze, więc sonda sprawdza realną drogę caddy -> panel.
+https://caddy:8443 {
+	tls internal
+	reverse_proxy panel:5000
+}

@@ -16,23 +16,34 @@ w panelu Healthchecks i zobacz historię).
 
 ## Alert: brak pingów „monitor" (cisza > 45 min)
 
-**Co się stało:** panel przestał odpowiadać albo cała maszyna padła
-(monitor wysyła ping tylko po udanej odpowiedzi panelu).
+**Co się stało:** panel albo front (caddy) przestał odpowiadać, albo
+cała maszyna padła (monitor wysyła ping tylko po udanej odpowiedzi
+ZARÓWNO panelu, jak i frontu — `https://caddy:8443/healthz`).
 
 **Jak sprawdzić:**
 1. Czy serwer żyje: `ping IP-serwera` / ssh na maszynę.
-2. `docker compose ps` — czy `panel` i `monitor` wstają (restart loop?).
-3. `docker compose logs --tail 100 panel` i `... monitor`.
+2. `docker compose ps` — czy `panel`, `caddy` i `monitor` wstają
+   (restart loop?).
+3. `docker compose logs --tail 100 panel`, `... caddy` i `... monitor`.
 
 **Typowe przyczyny:** restart maszyny z wiszącym Dockera; kontener
 panelu restartuje się w pętlę (baza zablokowana? brak klucza?);
-zapchany dysk (`df -h`).
+zapchany dysk (`df -h`); pad lub restart-loop caddy'ego; certyfikat
+Let's Encrypt przestał się odnawiać — w logach caddy szukaj błędów
+ACME/DNS (najczęstszy powód: `DUCKDNS_TOKEN` w `.env` przestał działać).
 
 **Co zrobić:** zwykle wystarczy `docker compose up -d --force-recreate`.
 Jeśli dysk pełny — wyczyść `docker system prune` i stare `eksport_*.xml`
 z `przetworzone/`. Jeśli restartuje się w pętlę — czytaj logi; baza
 SQLite „database is locked" = dwa procesy walczą o plik (zabierz
-ręcznie odpalone `python panel.py` obok kontenera).
+ręcznie odpalone `python panel.py` obok kontenera). Przy błędach ACME:
+odśwież token w `.env` (duckdns.org), potem `docker compose restart
+caddy` — stary certyfikat działa do wygaśnięcia, więc jest czas.
+
+**Czego ten alert NIE łapie** (świadome ograniczenie sondy wewnętrznej):
+zamkniętego portu 8443 na firewallze hosta (ruch międzykontenerowy go
+omija), wygaśnięcia ważności certyfikatu (sonda nie weryfikuje certu)
+oraz błędów DNS domeny — na to trzeba sondy z zewnątrz.
 
 ## Alert: brak pingów „strażnik" (po 20:30 nie ma raportu)
 

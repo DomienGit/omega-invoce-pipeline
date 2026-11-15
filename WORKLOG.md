@@ -488,3 +488,42 @@
     UWAGA: wczorajszy commit (HTTP-01) jest już na origin i jego
     deploy nie działa — ten commit go zastępuje.
 }
+
+
+15-11-2026 {
+    Monitor sprawdza też front (likwidacja ślepego punktu z 13-11):
+    - dotąd monitor odpytywał tylko panel w sieci compose — pad
+      caddy'ego (albo restart-loop, wywalona konfiguracja) był
+      niewidoczny dla Healthchecks, bo ping szedł dalej
+    - monitor.py: nowy stan_frontu() — GET https://caddy:8443/healthz
+      po nazwie serwisu; ping wychodzi dopiero, gdy OBA sprawdzenia
+      przejdą; treść pinga/logu dostaje "; front: ok"; nowa zmienna
+      MONITOR_URL_CADDY (pusta = check pomijany, np. lokalnie bez
+      caddy); TLS bez weryfikacji certu — certyfikat jest na nazwę
+      domeny publicznej, a łączymy się po wewnętrznej nazwie, więc
+      hostname nigdy by się nie zgodził; to sonda żywotności, nie
+      tożsamości (tę chroni logowanie do panelu)
+    - Caddyfile: dodatkowy blok https://caddy:8443 z tls internal —
+      bez niego caddy ODRZUCA handshake dla SNI, które nie ma
+      certyfikatu (TLSV1_ALERT_INTERNAL_ERROR); default_sni NIE
+      rozwiązuje sprawy (działa tylko przy braku SNI, sprawdzone);
+      sonda przechodzi przez ten sam reverse_proxy panel:5000
+    - compose: MONITOR_URL_CADDY=https://caddy:8443 dla monitora;
+      RUNBOOK: przepis "brak pingów monitor" rozszerzony o caddy,
+      błędy ACME/DUCKDNS_TOKEN i sekcję świadomych ograniczeń
+    - świadome ograniczenia sondy wewnętrznej (zapisane w RUNBOOK):
+      nie wykryje zamkniętego portu 8443 na firewallze HOSTA (ruch
+      międzykontenerowy omija publikowane porty), wygaśnięcia LE
+      certu (handshake bez weryfikacji) ani błędów DNS domeny —
+      to wymagałoby sondy zewnętrznej (odrzucone: kolejna
+      zależność, robimy dopiero jak zacznie boleć)
+
+    Testy lokalne (pełny stos, DOMENA=localhost): pierwszy cykl
+    "OK — przetworzone: 3, ...; front: ok"; stop caddy -> restart
+    monitora = "PANEL/FRONT NIE ODPOWIADA — ping niewysłany"
+    (kontener zniknął też z DNS sieci compose); powrót caddy =
+    OK z frontem. Po drodze złapany wyścig startowy: pierwszy cykl
+    monitora potrafi trafić w start panelu (connection refused,
+    znane z 28-10, nieszkodliwe — kolejna próba za 15 min, grace
+    Healthchecks 45 min).
+}
