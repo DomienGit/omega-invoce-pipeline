@@ -527,3 +527,30 @@
     znane z 28-10, nieszkodliwe — kolejna próba za 15 min, grace
     Healthchecks 45 min).
 }
+
+
+15-11-2026 (2) {
+    Pułapka deploy: caddy po zmianie Caddyfile działał dalej na
+    starych zasadach:
+    - deploy #6 (monitor + front) wstawił nowy obraz panelu/monitora,
+      ale caddy NIE został odtworzony — Caddyfile jest bind-mountem,
+      a compose porównuje konfigurację serwisu (obraz, env, porty),
+      nie TREŚĆ montowanych plików; "up -d" uznał, że nic się nie
+      zmieniło. Skutek podwójny: vhost sondy (https://caddy:8443)
+      nie istniał na produkcji (SNI caddy -> handshake odrzucony,
+      potwierdzone openssl z zewnątrz), a nowy monitor słusznie
+      przestał pingować — front realnie nie przechodził. Grace
+      45 min dał czas na reakcję bez fałszywego maila.
+    - fix: deploy.yml po "up -d --build" robi jawny
+      "docker compose exec -T caddy caddy reload" — reload bez
+      przerwy w działaniu; bonus: zepsuty Caddyfile = reload
+      zwraca błąd = czerwony deploy (stara konfiguracja zostaje
+      aktywna), zamiast cichego dalszego działania po staremu
+
+    Testy: po pushu deploy zielony; SNI caddy z zewnątrz dostaje
+    cert "Caddy Local Authority" na nazwę caddy (przed fixem: pusto),
+    SNI domeny nadal Let's Encrypt, endpointy bez zmian (healthz 200,
+    / -> 302 login). Kolejny cykl monitora (do 15 min) wraca do
+    pingowania z "front: ok" w treści — potwierdzenie w historii
+    pingów Healthchecks.
+}
