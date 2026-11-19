@@ -147,12 +147,15 @@ const STATUSY = {
   do_przetworzenia: { etykieta: "do przetworzenia", klasa: "szary" },
 };
 
-// NULL-tolerancja: brak danych (np. NIP w fakturze 016) pokazujemy jako "—"
-const val = (x) => (x === null || x === undefined || x === "" ? "—" : x);
-const kwota = (x) => (typeof x === "number" ? x.toFixed(2) : "—");
+// Dane faktur pochodzą z treści PDF-a / od użytkownika — do innerHTML
+// trafiają WYŁĄCZNIE przez esc() (raz, w miejscu wstawienia):
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[c]));
+// NULL-tolerancja: brak danych (np. NIP w fakturze 016) pokazujemy jako "—";
+// wynik jest już escapowany, więc nie owijać go drugi raz w esc():
+const val = (x) => (x === null || x === undefined || x === "" ? "—" : esc(x));
+const kwota = (x) => (typeof x === "number" ? x.toFixed(2) : "—");
 
 // Wspólny fetch: wygasła sesja (401) kieruje na formularz logowania,
 // zanim kod zdąży próbować czytać odpowiedź jako dane:
@@ -175,7 +178,7 @@ function pasuje(f, filtr) {
 
 function badge(status) {
   const s = STATUSY[status] || { etykieta: status, klasa: "blad" };
-  return `<span class="badge ${s.klasa}">${s.etykieta}</span>`;
+  return `<span class="badge ${s.klasa}">${esc(s.etykieta)}</span>`;
 }
 
 async function odswiez() {
@@ -223,7 +226,11 @@ async function wgraj(lista) {
   if (!odp.ok) { alert(w.blad || "wysyłka nieudana"); return; }
   _ostatniKomunikat =
     `Przyjęto ${w.zapisane} z ${pliki.length} plików` +
+    (w.zmienione_nazwy.length
+      ? ` (zapisane pod zmienioną nazwą: ${w.zmienione_nazwy.join("; ")})` : "") +
     (w.pominiete.length ? ` (pominięte: ${w.pominiete.join("; ")})` : "");
+  // komunikat trafia do textContent (ustawPrzetwarzanie), nie do innerHTML —
+  // nazwy plików nie wymagają tu escapowania
   await odswiez();
 }
 
@@ -422,18 +429,24 @@ function renderPodglad(f) {
 
   const pdfUrl = f.plik ? "/pdf/" + encodeURIComponent(f.plik) : null;
   const pdf = pdfUrl
-    ? `<embed src="${pdfUrl}" type="application/pdf">
-       <a class="pdf-link" href="${pdfUrl}" target="_blank" rel="noopener">
+    ? `<embed src="${esc(pdfUrl)}" type="application/pdf">
+       <a class="pdf-link" href="${esc(pdfUrl)}" target="_blank" rel="noopener">
          Otwórz ${esc(f.plik)} w nowej karcie</a>`
     : `<p class="brak-pdf">Brak pliku PDF dla tej faktury.</p>`;
 
   const przetworzPrzycisk = czeka
     ? `<button class="btn primary" id="btn-przetworz">Przetwórz ponownie</button>`
     : "";
-  const zatwierdzPrzycisk = !czeka && f.status !== "zatwierdzone"
-    ? `<button class="btn primary" id="btn-zatwierdz"
-         ${f.bledy.length ? "disabled title='Faktura ma błędy walidacji'" : ""}>
-         Zatwierdz</button>`
+  // zatwierdzić można tylko fakturę 'do zatwierdzenia' (serwer pilnuje tego
+  // też, ale nie kuszymy przyciskiem przy innych statusach):
+  const zatwierdzPrzycisk = f.status === "do_zatwierdzenia"
+    ? `<button class="btn primary" id="btn-zatwierdz">Zatwierdź</button>`
+    : "";
+  const zatwierdzenie = f.zatwierdzil
+    ? `<dt>Zatwierdził(a)</dt><dd>${val(f.zatwierdzil)}` +
+      (f.zatwierdzone_at
+        ? `, ${esc(new Date(f.zatwierdzone_at).toLocaleString("pl-PL"))}` : "") +
+      `</dd>`
     : "";
   const nastepna = nastepnaFaktura();
   const nastepnaPrzycisk = `
@@ -460,6 +473,7 @@ function renderPodglad(f) {
         <dt>Termin płatności</dt><dd>${val(f.termin_platnosci)}</dd>
         <dt>Netto / VAT / Brutto</dt>
         <dd>${kwota(f.netto)} / ${kwota(f.vat)} / ${kwota(f.brutto)} zł</dd>
+        ${zatwierdzenie}
       </dl>
       <h3>Pozycje (${f.pozycje.length})</h3>
       <table>

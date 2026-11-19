@@ -1,14 +1,71 @@
 name: deploy
 
 # KIEDY się uruchamia:
+#  - testy i budowa obrazu: każdy push (na dowolną gałąź) i każdy pull request,
+#    żeby błąd wyszedł zanim cokolwiek trafi na main,
+#  - deploy: tylko push na main (albo ręczny przycisk na main) i tylko
+#    wtedy, gdy testy oraz budowa obrazu przeszły — czerwony test blokuje
+#    wdrożenie.
 on:
-  push:
-    branches: [main]     # każdy push do main
+  push:                  # każdy push, każda gałąź
+  pull_request:          # + pull requesty
   workflow_dispatch:     # + ręczny przycisk "Run workflow" w zakładce Actions
 
 jobs:
-  deploy:
+  testy:
     runs-on: ubuntu-latest   # darmowa maszyna z Linuksem, wynajęta od GitHuba
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv z lockfile: --locked kończy się błędem, gdy uv.lock rozjechał się
+      # z pyproject.toml — testy biegną na dokładnie tych wersjach, co lokalnie.
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Zainstaluj zależności
+        run: uv sync --locked
+
+      # Testy nie wołają Gemini ani żadnej zewnętrznej usługi: odczyt AI jest
+      # w nich podstawiany, a baza i pliki lądują w katalogach tymczasowych.
+      - name: Testy
+        run: uv run pytest
+
+  obraz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Budujemy tylko obraz panelu (Dockerfile) i NIE publikujemy go — to
+      # sprawdzenie, że Dockerfile się buduje (np. nie brakuje pliku w COPY).
+      # Obrazu Caddy (Dockerfile.caddy) celowo nie budujemy: kompiluje moduł
+      # duckdns, jest wolny, a zmienia się rzadko.
+      - name: Zbuduj obraz panelu
+        run: docker build -t omega-faktury-test .
+
+      # Sam build nie wykryje brakującego pliku w COPY (import padnie
+      # dopiero przy starcie), więc uruchamiamy kontener i pytamy /healthz.
+      # Klucz Gemini pusty — panel startuje, a kolejka po prostu czeka.
+      - name: Uruchom kontener i sprawdź /healthz
+        run: |
+          docker run -d --name panel-test \
+            -e BEZ_PRZEGLADARKI=1 -e PANEL_HOST=0.0.0.0 -e GEMINI_API_KEY= \
+            omega-faktury-test
+          for i in $(seq 1 15); do
+            if docker exec panel-test python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=3)" 2>/dev/null; then
+              echo "panel odpowiada"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::panel w kontenerze nie odpowiada na /healthz"
+          docker logs panel-test
+          exit 1
+
+  deploy:
+    needs: [testy, obraz]    # bez zielonych testów i obrazu deploy w ogóle nie rusza
+    # push na main albo ręczne uruchomienie — ale ręczne tylko na main,
+    # żeby z gałęzi roboczej nie dało się wdrożyć niezmergowanego kodu:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
     steps:
       # 1. Klucz prywatny z Secretu trafia do pliku na runnerze.
       #    Bez chmod 600 ssh odmówi jego użycia (pamiętasz "UNPROTECTED PRIVATE KEY").
@@ -18,11 +75,21 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_omega
           chmod 600 ~/.ssh/deploy_omega
 
-      # 2. Odcisk palca VPS-a do known_hosts — inaczej ssh odmówi
-      #    połączenia z "nieznanym" serwerem. -H zapisuje odcisk w formie
-      #    zahaszowanej (standard).
-      - name: Zaufaj VPS (known_hosts)
-        run: ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+      # 2. Klucz hosta VPS-a z Secretu zamiast ssh-keyscan. Keyscan pobierał
+      #    klucz od tego, kto akurat odpowiedział, więc ufał też podmienionemu
+      #    serwerowi (atak man-in-the-middle). Sekret VPS_HOST_KEY ma gotową
+      #    linię known_hosts: "host typ-klucza klucz". Pusty = twardy błąd,
+      #    nigdy ciche wrócenie do keyscan.
+      - name: Zaufaj VPS (known_hosts z sekretu)
+        env:
+          VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          if [ -z "$VPS_HOST_KEY" ]; then
+            echo "::error::Brak sekretu VPS_HOST_KEY — dodaj w Settings > Secrets and variables > Actions linię known_hosts serwera (patrz README: 'Klucz hosta')."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "$VPS_HOST_KEY" >> ~/.ssh/known_hosts
 
       # 3. Właściwy deploy. && = każda kolejna komenda tylko, gdy poprzednia
       #    się udała; gdy coś padnie, ssh zwróci błąd i workflow czerwone.
@@ -36,3 +103,29 @@ jobs:
       - name: Deploy na VPS
         run: |
           ssh -i ~/.ssh/deploy_omega -o BatchMode=yes ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd ~/omega-invoce-pipeline && git pull && docker compose up -d --build && docker compose up -d --force-recreate caddy && docker image prune -f && docker compose ps'
+
+      # 4. Zielony deploy potwierdza tylko, że komendy się wykonały (lekcja
+      #    z caddy'm: reload był no-opem, a check świecił na zielono), więc
+      #    sprawdzamy SKUTEK: /healthz przez HTTPS z zewnątrz. Kilka prób,
+      #    bo po force-recreate caddy potrzebuje chwili. Zmienna repozytorium
+      #    PANEL_URL (np. https://domena:8443, bez końcowego "/") — gdy
+      #    nieustawiona, krok jest pomijany z komunikatem.
+      - name: Sprawdź zdrowie po deployu
+        env:
+          PANEL_URL: ${{ vars.PANEL_URL }}
+        run: |
+          if [ -z "$PANEL_URL" ]; then
+            echo "Zmienna repozytorium PANEL_URL nieustawiona — pomijam sprawdzenie /healthz."
+            exit 0
+          fi
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 10 "${PANEL_URL%/}/healthz"; then
+              echo
+              echo "healthz OK (próba $i)"
+              exit 0
+            fi
+            echo "próba $i nieudana, czekam 10 s"
+            sleep 10
+          done
+          echo "::error::${PANEL_URL%/}/healthz nie odpowiada po deployu"
+          exit 1

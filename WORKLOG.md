@@ -565,3 +565,61 @@
     monitora (do 15 min) wraca do pingowania z "front: ok" w treści
     — potwierdzenie w historii pingów Healthchecks.
 }
+
+16-11-2026 {
+    Poprawki etapu pierwszego (PLAN_POPRAWEK.md):
+    1. XSS w panelu: val() zwraca tekst przepuszczony przez esc(); badge
+       i adres PDF tez escapowane; komunikat po wgraniu idzie do
+       textContent, wiec bezpieczny
+    2. Zatwierdzanie tylko z 'do_zatwierdzenia': warunek w samym UPDATE
+       (baza.zatwierdz_fakture); endpoint 404 / 409; przycisk tylko dla
+       tego statusu
+    3. Wgrywanie nie nadpisuje: zajeta nazwa (wiersz w bazie lub plik
+       w data/) -> faktura_1.pdf; plik zapisywany PRZED wstawieniem
+       wiersza, usuwany gdy wstawienie sie nie uda; odpowiedz zawiera
+       zmienione_nazwy; to samo dla kopii PDF w przetworzone/
+    4. Duplikaty po parze (numer, NIP sprzedawcy); bez NIP-u po numerze
+    5. Eksport atomowy: lista id ustalana raz (eksport.eksportuj_zatwierdzone),
+       status zmieniany tylko dla niej; w panelu blokada, drugi
+       rownolegly eksport dostaje 409
+    6. Cookie Secure za proxy + naglowki (CSP, XFO, nosniff, Referrer,
+       HSTS za proxy); /pdf/ ma SAMEORIGIN / frame-ancestors 'self',
+       bo embed PDF w Chrome nie dziala przy DENY
+    7. Kolumny zatwierdzil / zatwierdzone_at (migracja ALTER TABLE),
+       login z sesji / 'tryb-deweloperski' / 'token-monitora', atrybuty
+       w XML, wyswietlane w szczegolach
+    Sprawdzenie: skrypt w katalogu tymczasowym na tymczasowej bazie
+    (test_client, bez Gemini): kolizje nazw, duplikaty, 404/409,
+    rownolegly eksport, atrybuty XML, migracja starej bazy.
+}
+
+16-11-2026 (2) {
+    Plan rozwoju pkt 1: refaktoryzacja konfiguracji, testy automatyczne,
+    bezpieczniejszy deploy.
+    Refaktoryzacja (zachowanie bez zmian, domyslne sciezki jak dotad):
+    - nowy konfiguracja.py: dataclass Konfiguracja (katalogi, klucze,
+      konta, proxy, host/port) + z_srodowiska() (te same zmienne co
+      dotad + opcjonalne OMEGA_KATALOG_DANYCH/_EKSPORTU/_LOGOW)
+    - load_dotenv() tylko w main() punktow wejscia (panel, weryfikator,
+      eksport, straznik, desktop); import niczego nie wczytuje
+    - baza.polacz(sciezka) i dodaj_do_kolejki(..., folder) bez domyslnych
+      sciezek; weryfikator/eksport dostaja katalogi jawnie
+    - panel.py: utworz_app(konf) zamiast app na poziomie modulu; stan
+      (blokady, licznik prob logowania, znacznik batcha) w
+      app.extensions["omega"], wiec kazda aplikacja ma wlasny; brak
+      SECRET_KEY przy kontach = ValueError (main -> SystemExit)
+    - desktop.py dostosowany do utworz_app/przygotuj_dane(konf)
+    Testy: tests/ (pytest, grupa dev; w obrazie Dockera go nie ma) —
+    walidacja, baza, migracja ze starego schematu, eksport, panel
+    (test_client), konfiguracja; bez Gemini, na tmp_path.
+    Znaleziony blad aplikacji (xfail): waliduj odrzuca roznice dokladnie
+    1 grosza (float: 0.0100000000000051 > 0.01) mimo deklarowanej
+    tolerancji — do osobnej poprawki.
+    Workflow: testy + budowa obrazu panelu (z startem i /healthz) na
+    kazdym pushu i PR; deploy tylko z main po zielonych testach; klucz
+    hosta z sekretu VPS_HOST_KEY zamiast ssh-keyscan; po deployu
+    /healthz przez HTTPS (zmienna PANEL_URL, opcjonalna).
+    webview-python przeniesione do grupy opcjonalnej "desktop" (desktop.py
+    importuje modul webview z pakietu pywebview — mozliwa pomylka
+    w nazwie pakietu, do decyzji).
+}

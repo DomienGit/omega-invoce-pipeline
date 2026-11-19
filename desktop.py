@@ -18,7 +18,9 @@ import threading
 import time
 
 import webview
+from dotenv import load_dotenv
 
+import konfiguracja
 import panel
 
 
@@ -42,15 +44,23 @@ def czekaj_na_serwer(host: str, port: int, timeout_s: float = 15) -> bool:
 
 
 def main():
-    host, port = panel.HOST, panel.PORT
+    # .env tylko w punkcie wejścia (import panel.py niczego nie wczytuje);
+    # konfiguracja i aplikacja budowane jawnie, jak w panel.main():
+    load_dotenv()
+    konf = konfiguracja.z_srodowiska()
+    host, port = konf.host, konf.port
     url = f"http://{host}:{port}"
 
     if port_odpowiada(host, port):
         print("Panel już działa (port zajęty) — otwieram samo okno.")
     else:
-        panel.przygotuj_dane()
+        try:
+            app = panel.utworz_app(konf)
+        except ValueError as e:
+            raise SystemExit(str(e))
+        panel.przygotuj_dane(konf)
         watek = threading.Thread(
-            target=panel.app.run, kwargs={"host": host, "port": port},
+            target=app.run, kwargs={"host": host, "port": port},
             daemon=True)  # daemon=True: ginie, gdy zamknie się okno
         watek.start()
         if not czekaj_na_serwer(host, port):

@@ -2,6 +2,12 @@
 
 Uruchomienie:  python panel.py
 
+Aplikację buduje funkcja utworz_app(konf) z konfiguracja.Konfiguracja —
+bez stanu na poziomie modułu (blokady, liczniki prób logowania i znacznik
+przetwarzania należą do konkretnej aplikacji), dzięki czemu testy tworzą
+niezależne aplikacje na katalogach tymczasowych. .env wczytuje dopiero
+main() (nigdy import).
+
 Przebieg:
   1. Przy starcie: przetworzenie kolejki 'do_przetworzenia' z bazy
      (wznowienie po przerwaniu — patrz niżej). Bez GEMINI_API_KEY krok
@@ -20,10 +26,16 @@ Możliwości panelu (dla księgowej):
     (nieudanych) faktur — też automatycznie przy każdym starcie,
   - podgląd: wyekstrahowane dane + pozycje obok oryginalnego PDF
     (tylko odczyt — bez możliwości korygowania),
-  - zatwierdzenie faktury bez błędów — status 'zatwierdzone' jest
-    chroniony przed nadpisaniem,
+  - zatwierdzenie faktury 'do zatwierdzenia' (bez błędów); zapisuje się,
+    kto i kiedy ją zatwierdził (login z sesji),
   - eksport zatwierdzonych faktur do XML + PDF-y (eksport.py), po czym
-    faktury dostają status 'wyeksportowane' i znikają z panelu.
+    faktury dostają status 'wyeksportowane' i znikają z panelu; eksport
+    działa pod blokadą — drugi równoczesny dostaje 409.
+
+Wgrywanie nigdy nie nadpisuje istniejących faktur ani plików: zajęta
+nazwa pliku zamieniana jest na wolną (faktura_1.pdf). Każda odpowiedź
+dostaje nagłówki bezpieczeństwa (CSP, nosniff, DENY...), a za proxy
+(PANEL_ZA_PROXY=1) ciasteczko sesji ma flagę Secure i jest HSTS.
 
 Endpointy:
   GET  /                             panel (templates/panel.html)
@@ -58,339 +70,400 @@ from werkzeug.security import check_password_hash
 
 import baza
 import eksport
+import konfiguracja
 import weryfikator
 
-# .env potrzebny już przy konfiguracji logowania poniżej (kiedyś wołane
-# dopiero w przygotuj_dane() — za późno dla SECRET_KEY/PANEL_KONTA):
-load_dotenv()
-
-# Na hoście panel jest lokalny (127.0.0.1); w kontenerze compose ustawia
-# PANEL_HOST=0.0.0.0, żeby dosięgła go nakładka/przeglądarka z sieci:
-HOST = os.environ.get("PANEL_HOST", "127.0.0.1")
-PORT = int(os.environ.get("PANEL_PORT", "5000"))
-
-app = Flask(__name__)
-# PDF-y bywają ciężkie (skany) — hojny limit jednorazowej wysyłki:
-app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024
-
-# --- logowanie (sesje) ------------------------------------------------------
-
-# Konta w PANEL_KONTA jako "login=hash;login2=hash2" — hash z werkzeug
-# (generate_password_hash), nigdy jawne hasło. Hash zawiera ":" i "$",
-# więc separatorem jest ";" a klucz/wartość rozdziela pierwszy "=":
-def _wczytaj_konta() -> dict[str, str]:
-    konta: dict[str, str] = {}
-    for wpis in (os.environ.get("PANEL_KONTA") or "").split(";"):
-        login, _, haslo_hash = wpis.strip().partition("=")
-        if login:
-            konta[login] = haslo_hash
-    return konta
-
-
-KONTA = _wczytaj_konta()
-AUTH_WLACZONA = bool(KONTA)   # puste PANEL_KONTA = tryb deweloperski (bez logowania)
-PANEL_TOKEN = os.environ.get("PANEL_TOKEN") or ""
-
-if AUTH_WLACZONA and not os.environ.get("SECRET_KEY"):
-    raise SystemExit("PANEL_KONTA ustawione, ale brak SECRET_KEY — wygeneruj: "
-                     'python -c "import secrets; print(secrets.token_hex(32))"')
-
-if AUTH_WLACZONA:
-    app.config.update(
-        SECRET_KEY=os.environ["SECRET_KEY"],
-        SESSION_COOKIE_NAME="omega_panel_sesja",
-        SESSION_COOKIE_HTTPONLY=True,   # JS nie widzi ciasteczka (ochrona XSS)
-        SESSION_COOKIE_SAMESITE="Lax",  # ciasteczko nie leci w cross-site POST (CSRF)
-        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),  # dzień pracy księgowej
-    )
-
-# Za Caddy remote_addr to zawsze IP kontenera proxy — ProxyFix bierze IP
-# klienta z X-Forwarded-For. Włączone tylko w compose (PANEL_ZA_PROXY=1):
-# bez proxy klient mógłby podrobić nagłówek i resetować licznik prób.
-if os.environ.get("PANEL_ZA_PROXY") == "1":
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
-
-# Nieudane logowania w pamięci procesu (restart czyści — akceptowalne):
-_PROBY: dict[str, list[float]] = defaultdict(list)
-_ZAMEK_PROB = threading.Lock()
 LIMIT_PROB = 5
 BLOKADA_S = 15 * 60
-
-
-def _zablokowane(ip: str) -> bool:
-    granica = time.monotonic() - BLOKADA_S
-    with _ZAMEK_PROB:
-        czasy = [t for t in _PROBY[ip] if t > granica]
-        _PROBY[ip] = czasy
-        return len(czasy) >= LIMIT_PROB
-
-
-def _blad_logowania(ip: str) -> None:
-    with _ZAMEK_PROB:
-        _PROBY[ip].append(time.monotonic())
-
-
 _PUBLICZNE = {"login", "login_post", "wyloguj", "healthz"}  # nazwy endpointów
 
-
-@app.before_request
-def pilnuj_dostepu():
-    """Jedna brama dla wszystkich endpointów (strona, API, PDF-y, eksport).
-
-    Przepuszcza: wyłączone logowanie, endpointy publiczne, żądania
-    monitora z tokenem (porównanie stałoczasowe), zalogowaną sesję.
-    API/PDF odpowiadają 401 JSON-em (łapie to JS panelu), strony
-    przekierowują na formularz logowania.
-    """
-    if (not AUTH_WLACZONA or request.endpoint in _PUBLICZNE
-            or request.endpoint is None):   # brak trasy = 404, nic nie wycieka
-        return None
-    if PANEL_TOKEN and secrets.compare_digest(
-            request.headers.get("Authorization", ""), f"Bearer {PANEL_TOKEN}"):
-        return None
-    if session.get("zalogowany"):
-        return None
-    if request.path.startswith(("/api/", "/pdf/")) or request.path == "/eksport":
-        return jsonify({"blad": "wymagane logowanie"}), 401
-    return redirect(url_for("login"))
+# Szablony mają skrypty i style wbudowane w stronę (stąd 'unsafe-inline'),
+# ale nic nie ładują z zewnątrz; object-src 'self' dla podglądu PDF (embed):
+_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; object-src 'self'; "
+        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
 
-@app.get("/login")
-def login():
-    if not AUTH_WLACZONA or session.get("zalogowany"):
-        return redirect(url_for("strona"))
-    return render_template("login.html")
+class Stan:
+    """Stan jednej aplikacji (nie modułu): blokady, znacznik batcha,
+    nieudane logowania w pamięci procesu (restart czyści — akceptowalne)."""
+
+    def __init__(self) -> None:
+        self.przetwarzanie = threading.Event()  # czy batch właśnie leci (UI)
+        self.zamek_batcha = threading.Lock()    # wykluczanie przebiegów batcha
+        self.zamek_wgrywania = threading.Lock()  # jedno wgranie plików naraz
+        self.zamek_eksportu = threading.Lock()   # jeden eksport naraz
+        self.proby: dict[str, list[float]] = defaultdict(list)
+        self.zamek_prob = threading.Lock()
+
+    def zablokowane(self, ip: str) -> bool:
+        granica = time.monotonic() - BLOKADA_S
+        with self.zamek_prob:
+            czasy = [t for t in self.proby[ip] if t > granica]
+            self.proby[ip] = czasy
+            return len(czasy) >= LIMIT_PROB
+
+    def blad_logowania(self, ip: str) -> None:
+        with self.zamek_prob:
+            self.proby[ip].append(time.monotonic())
 
 
-@app.post("/login")
-def login_post():
-    ip = request.remote_addr or "?"
-    if _zablokowane(ip):
-        return render_template(
-            "login.html",
-            blad="Za dużo nieudanych prób — odczekaj ok. 15 minut."), 429
-    login = request.form.get("login", "").strip()
-    haslo = request.form.get("haslo", "")
-    haslo_hash = KONTA.get(login)
-    if haslo_hash and check_password_hash(haslo_hash, haslo):
-        session.clear()             # obrót sesji przy zmianie uprawnień
-        session["zalogowany"] = True
-        session["login"] = login
-        session.permanent = True    # bez tego brak Expires — wygaśnięcie 8 h nie działa
-        with _ZAMEK_PROB:
-            _PROBY.pop(ip, None)
-        return redirect(url_for("strona"))
-    _blad_logowania(ip)
-    time.sleep(0.3)                 # lekkie spowolnienie zgadywania hasła
-    # jeden komunikat dla złego loginu i hasła — nie zdradzamy, co się nie zgadza:
-    return render_template("login.html", blad="Błędny login lub hasło."), 401
-
-
-@app.post("/api/wyloguj")
-def wyloguj():
-    session.clear()
-    return redirect(url_for("login"))
-
-
-@app.get("/healthz")
-def healthz():
-    """Żywy proces bez żadnych danych — dla HEALTHCHECK Dockera."""
-    return jsonify({"ok": True})
-
-# --- wgrywanie faktur (batch w tle) -----------------------------------------
-
-_PRZETWARZANIE = threading.Event()   # czy batch właśnie leci (status dla UI)
-_ZAMEK = threading.Lock()            # wzajemne wykluczanie przebiegów batcha
-
-
-def _batch_w_tle() -> None:
+def _batch_w_tle(konf: konfiguracja.Konfiguracja, stan: Stan) -> None:
     """Wątek tła: przetwarza kolejkę 'do_przetworzenia' z bazy (logika
     w weryfikator.przetworz_kolejke), a po przebiegu sprawdza jeszcze raz
     — pliki wgrane w trakcie też zostaną obsłużone. Bez klucza API nie
     startuje (kolejka czeka)."""
-    with _ZAMEK:
-        _PRZETWARZANIE.set()
+    with stan.zamek_batcha:
+        stan.przetwarzanie.set()
         try:
-            if not os.environ.get("GEMINI_API_KEY"):
+            if not konf.gemini_api_key:
                 return
-            klient = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            klient = genai.Client(api_key=konf.gemini_api_key)
             while True:
-                con = baza.polacz()
+                con = baza.polacz(konf.sciezka_bazy)
                 try:
-                    n = weryfikator.przetworz_kolejke(klient, con)
+                    n = weryfikator.przetworz_kolejke(
+                        klient, con, konf.katalog_danych)
                 finally:
                     baza.zamknij(con)
                 if n == 0:
                     break
         finally:
-            _PRZETWARZANIE.clear()
+            stan.przetwarzanie.clear()
 
 
-# --- endpointy ------------------------------------------------------------
+def utworz_app(konf: konfiguracja.Konfiguracja) -> Flask:
+    """Buduje aplikację Flask z podanej konfiguracji (bez stanu w module).
 
-
-@app.get("/")
-def strona():
-    return send_from_directory("templates", "panel.html")
-
-
-@app.get("/api/faktury")
-def api_faktury():
-    con = baza.polacz()
-    try:
-        # wyeksportowane nie są już potrzebne księgowej — ukrywamy:
-        faktury = [f for f in baza.pobierz_faktury(con)
-                   if f["status"] != "wyeksportowane"]
-        for f in faktury:
-            szczegoly = baza.pobierz_szczegoly(con, f["id"])
-            f["pozycje"] = szczegoly["pozycje"] if szczegoly else []
-    finally:
-        baza.zamknij(con)
-    return jsonify({
-        "stanNa": datetime.now().isoformat(timespec="seconds"),
-        "faktury": faktury,
-    })
-
-
-@app.post("/api/faktury/wgraj")
-def api_wgraj():
-    """Przyjmuje PDF-y od księgowej (multipart): każdy trafia do kolejki.
-
-    Nie-PDF-y są pomijane z powodem. Treść już znaną bazie (odcisk
-    SHA-256) pomijamy ("już przetworzona" / "już w kolejce"), zanim plik
-    cokolwiek kosztuje. Przyjęte PDF-y lądują w data/ ze statusem
-    'do przetworzenia' i są przetwarzane w tle (od razu albo po bieżącym
-    przebiegu — patrz _batch_w_tle).
+    Rzuca ValueError, gdy są konta, a brak secret_key (main() zamienia to
+    na SystemExit). Stan aplikacji: app.extensions["omega"] (obiekt Stan).
     """
-    zapisane: list[str] = []
-    pominiete: list[str] = []
-    con = baza.polacz()
-    try:
-        for plik in request.files.getlist("pliki"):
-            # basename neutralizuje ewentualne ścieżki w nazwie (przejście
-            # poza data/ jest niemożliwe):
-            nazwa = os.path.basename(plik.filename or "")
-            if not nazwa.lower().endswith(".pdf"):
-                pominiete.append(f"{nazwa}: to nie jest PDF")
-                continue
-            bajty = plik.read()
-            powod = baza.dodaj_do_kolejki(con, nazwa,
-                                          baza.odcisk_bajtow(bajty))
-            if powod:
-                pominiete.append(f"{nazwa}: {powod}")
-            else:
-                with open(os.path.join("data", nazwa), "wb") as docelowy:
-                    docelowy.write(bajty)
-                zapisane.append(nazwa)
-    finally:
-        baza.zamknij(con)
+    if konf.auth_wlaczona and not konf.secret_key:
+        raise ValueError(
+            "PANEL_KONTA ustawione, ale brak SECRET_KEY — wygeneruj: "
+            'python -c "import secrets; print(secrets.token_hex(32))"')
 
-    if zapisane and not _PRZETWARZANIE.is_set():
-        threading.Thread(target=_batch_w_tle, daemon=True).start()
-    return jsonify({"zapisane": len(zapisane), "pominiete": pominiete})
+    # root_path = katalog modułu, więc szablony nie zależą od katalogu
+    # roboczego procesu:
+    app = Flask(__name__)
+    stan = Stan()
+    app.extensions["omega"] = stan
+    # PDF-y bywają ciężkie (skany) — hojny limit jednorazowej wysyłki:
+    app.config["MAX_CONTENT_LENGTH"] = 128 * 1024 * 1024
 
+    if konf.auth_wlaczona:
+        app.config.update(
+            SECRET_KEY=konf.secret_key,
+            SESSION_COOKIE_NAME="omega_panel_sesja",
+            SESSION_COOKIE_HTTPONLY=True,   # JS nie widzi ciasteczka (ochrona XSS)
+            SESSION_COOKIE_SAMESITE="Lax",  # ciasteczko nie leci w cross-site POST (CSRF)
+            # za Caddy panel stoi pod HTTPS — ciasteczko tylko po szyfrowanym
+            # łączu; lokalnie po HTTP flaga musi być wyłączona, inaczej
+            # przeglądarka odrzuci ciasteczko i logowanie nie zadziała:
+            SESSION_COOKIE_SECURE=konf.za_proxy,
+            PERMANENT_SESSION_LIFETIME=timedelta(hours=8),  # dzień pracy księgowej
+        )
 
-@app.post("/api/przetwarzaj")
-def api_przetwarzaj():
-    """Ręczne uruchomienie przetwarzania kolejki (przycisk w panelu)."""
-    con = baza.polacz()
-    try:
-        czeka = con.execute(
-            "SELECT 1 FROM faktury WHERE status = 'do_przetworzenia' LIMIT 1"
-        ).fetchone()
-    finally:
-        baza.zamknij(con)
-    if not czeka:
-        return jsonify({"blad": "kolejka jest pusta"}), 409
-    if not os.environ.get("GEMINI_API_KEY"):
-        return jsonify({"blad": "brak klucza GEMINI_API_KEY na serwerze"}), 503
-    if not _PRZETWARZANIE.is_set():
-        threading.Thread(target=_batch_w_tle, daemon=True).start()
-    return jsonify({"ok": True})
+    # Za Caddy remote_addr to zawsze IP kontenera proxy — ProxyFix bierze IP
+    # klienta z X-Forwarded-For. Włączone tylko za proxy (PANEL_ZA_PROXY=1):
+    # bez proxy klient mógłby podrobić nagłówek i resetować licznik prób.
+    if konf.za_proxy:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 
+    @app.after_request
+    def naglowki_bezpieczenstwa(odp):
+        """Nagłówki chroniące przed ramkami, zgadywaniem typu i obcymi skryptami.
 
-@app.get("/api/przetwarzanie")
-def api_przetwarzanie():
-    return jsonify({"aktywny": _PRZETWARZANIE.is_set()})
-
-
-@app.get("/pdf/<plik>")
-def pdf(plik: str):
-    # serwujemy wyłącznie pliki przypisane do faktur w bazie:
-    con = baza.polacz()
-    try:
-        istnieje = con.execute(
-            "SELECT 1 FROM faktury WHERE plik = ?", (plik,)).fetchone()
-    finally:
-        baza.zamknij(con)
-    if not istnieje:
-        return jsonify({"blad": "nie ma takiego pliku w bazie"}), 404
-    return send_from_directory("data", plik)
+        Wyjątek: PDF-y (/pdf/) wolno osadzić we własnym panelu — Chrome
+        pokazuje <embed> z PDF-em tylko, gdy dokument nie ma X-Frame-Options:
+        DENY / frame-ancestors 'none', więc dla nich ramka z własnego źródła
+        jest dozwolona (SAMEORIGIN / 'self'); obce strony nadal nie mogą.
+        """
+        wlasny_pdf = request.path.startswith("/pdf/")
+        odp.headers["X-Content-Type-Options"] = "nosniff"
+        odp.headers["X-Frame-Options"] = "SAMEORIGIN" if wlasny_pdf else "DENY"
+        odp.headers["Referrer-Policy"] = "same-origin"
+        odp.headers["Content-Security-Policy"] = (
+            _CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+            if wlasny_pdf else _CSP)
+        if konf.za_proxy:
+            odp.headers["Strict-Transport-Security"] = "max-age=31536000"
+        return odp
 
 
-@app.post("/api/faktury/<int:faktura_id>/zatwierdz")
-def api_zatwierdz(faktura_id: int):
-    con = baza.polacz()
-    try:
-        f = baza.pobierz_szczegoly(con, faktura_id)
-        if f is None:
-            return jsonify({"blad": "nie ma takiej faktury"}), 404
-        if f["bledy"]:
-            return jsonify({"blad": "faktura ma błędy walidacji — "
-                                     "nie może zostać zatwierdzona"}), 409
-        baza.zatwierdz_fakture(con, faktura_id)
-    finally:
-        baza.zamknij(con)
-    return jsonify({"ok": True})
+    @app.before_request
+    def pilnuj_dostepu():
+        """Jedna brama dla wszystkich endpointów (strona, API, PDF-y, eksport).
+
+        Przepuszcza: wyłączone logowanie, endpointy publiczne, żądania
+        monitora z tokenem (porównanie stałoczasowe), zalogowaną sesję.
+        API/PDF odpowiadają 401 JSON-em (łapie to JS panelu), strony
+        przekierowują na formularz logowania.
+        """
+        if (not konf.auth_wlaczona or request.endpoint in _PUBLICZNE
+                or request.endpoint is None):   # brak trasy = 404, nic nie wycieka
+            return None
+        if konf.panel_token and secrets.compare_digest(
+                request.headers.get("Authorization", ""), f"Bearer {konf.panel_token}"):
+            return None
+        if session.get("zalogowany"):
+            return None
+        if request.path.startswith(("/api/", "/pdf/")) or request.path == "/eksport":
+            return jsonify({"blad": "wymagane logowanie"}), 401
+        return redirect(url_for("login"))
 
 
-@app.post("/api/eksport")
-def api_eksport():
-    con = baza.polacz()
-    try:
-        n, plik_xml = eksport.eksportuj_xml(con)  # status: zatwierdzone
-        pdfy = eksport.zapisz_pdf_do_przetworzonych(con)
-        if n:
-            baza.oznacz_wyeksportowane(con)  # znikają z panelu
-    finally:
-        baza.zamknij(con)
-    if n == 0:
-        return jsonify({"blad": "brak zatwierdzonych faktur do eksportu"}), 409
-    return jsonify({"liczba": n, "pdfy": pdfy,
-                    "folder": eksport.FOLDER_PRZETWORZONE,
-                    "plik": os.path.basename(plik_xml)})
+    @app.get("/login")
+    def login():
+        if not konf.auth_wlaczona or session.get("zalogowany"):
+            return redirect(url_for("strona"))
+        return render_template("login.html")
 
 
-@app.get("/eksport")
-def pobierz_eksport():
-    # każdy eksport to nowy plik (eksport.xml, eksport_1.xml...) — pobieramy
-    # najnowszy, czyli o największej dacie modyfikacji:
-    pliki = sorted(
-        glob.glob(os.path.join(eksport.FOLDER_PRZETWORZONE, "eksport*.xml")),
-        key=os.path.getmtime)
-    if not pliki:
-        return jsonify({"blad": "plik eksportu jeszcze nie powstał"}), 404
-    return send_file(pliki[-1], as_attachment=True)
+    @app.post("/login")
+    def login_post():
+        ip = request.remote_addr or "?"
+        if stan.zablokowane(ip):
+            return render_template(
+                "login.html",
+                blad="Za dużo nieudanych prób — odczekaj ok. 15 minut."), 429
+        login = request.form.get("login", "").strip()
+        haslo = request.form.get("haslo", "")
+        haslo_hash = konf.konta.get(login)
+        if haslo_hash and check_password_hash(haslo_hash, haslo):
+            session.clear()             # obrót sesji przy zmianie uprawnień
+            session["zalogowany"] = True
+            session["login"] = login
+            session.permanent = True    # bez tego brak Expires — wygaśnięcie 8 h nie działa
+            with stan.zamek_prob:
+                stan.proby.pop(ip, None)
+            return redirect(url_for("strona"))
+        stan.blad_logowania(ip)
+        time.sleep(0.3)                 # lekkie spowolnienie zgadywania hasła
+        # jeden komunikat dla złego loginu i hasła — nie zdradzamy, co się nie zgadza:
+        return render_template("login.html", blad="Błędny login lub hasło."), 401
+
+
+    @app.post("/api/wyloguj")
+    def wyloguj():
+        session.clear()
+        return redirect(url_for("login"))
+
+
+    @app.get("/healthz")
+    def healthz():
+        """Żywy proces bez żadnych danych — dla HEALTHCHECK Dockera."""
+        return jsonify({"ok": True})
+
+    @app.get("/")
+    def strona():
+        return send_from_directory("templates", "panel.html")
+
+
+    @app.get("/api/faktury")
+    def api_faktury():
+        con = baza.polacz(konf.sciezka_bazy)
+        try:
+            # wyeksportowane nie są już potrzebne księgowej — ukrywamy:
+            faktury = [f for f in baza.pobierz_faktury(con)
+                       if f["status"] != "wyeksportowane"]
+            for f in faktury:
+                szczegoly = baza.pobierz_szczegoly(con, f["id"])
+                f["pozycje"] = szczegoly["pozycje"] if szczegoly else []
+        finally:
+            baza.zamknij(con)
+        return jsonify({
+            "stanNa": datetime.now().isoformat(timespec="seconds"),
+            "faktury": faktury,
+        })
+
+
+    @app.post("/api/faktury/wgraj")
+    def api_wgraj():
+        """Przyjmuje PDF-y od księgowej (multipart): każdy trafia do kolejki.
+
+        Nie-PDF-y są pomijane z powodem. Treść już znaną bazie (odcisk
+        SHA-256) pomijamy ("już przetworzona" / "już w kolejce"), zanim plik
+        cokolwiek kosztuje. Przyjęte PDF-y lądują w data/ ze statusem
+        'do przetworzenia' i są przetwarzane w tle (od razu albo po bieżącym
+        przebiegu — patrz _batch_w_tle(konf, stan)). Zajęta nazwa pliku nie powoduje
+        nadpisania: faktura dostaje wolną nazwę (faktura_1.pdf), a odpowiedź
+        wymienia zmienione nazwy w 'zmienione_nazwy'.
+        """
+        zapisane: list[str] = []
+        pominiete: list[str] = []
+        zmienione: list[str] = []
+        con = baza.polacz(konf.sciezka_bazy)
+        try:
+            # jedno wgranie naraz — wybór wolnej nazwy i zapis pliku nie mogą
+            # się pokrywać z równoległym żądaniem:
+            with stan.zamek_wgrywania:
+                for plik in request.files.getlist("pliki"):
+                    # basename neutralizuje ewentualne ścieżki w nazwie
+                    # (przejście poza data/ jest niemożliwe):
+                    nazwa = os.path.basename(plik.filename or "")
+                    if not nazwa.lower().endswith(".pdf"):
+                        pominiete.append(f"{nazwa}: to nie jest PDF")
+                        continue
+                    bajty = plik.read()
+
+                    def zapisz(wolna_nazwa: str, bajty=bajty) -> None:
+                        with open(os.path.join(konf.katalog_danych, wolna_nazwa),
+                                  "wb") as docelowy:
+                            docelowy.write(bajty)
+
+                    # plik ląduje na dysku PRZED wierszem w bazie (wątek tła nie
+                    # znajdzie w kolejce faktury bez PDF-a):
+                    zarejestrowana, powod = baza.dodaj_do_kolejki(
+                        con, nazwa, baza.odcisk_bajtow(bajty), konf.katalog_danych, zapisz)
+                    if powod:
+                        pominiete.append(f"{nazwa}: {powod}")
+                    else:
+                        zapisane.append(zarejestrowana)
+                        if zarejestrowana != nazwa:
+                            zmienione.append(f"{nazwa} → {zarejestrowana}")
+        finally:
+            baza.zamknij(con)
+
+        if zapisane and not stan.przetwarzanie.is_set():
+            threading.Thread(target=_batch_w_tle, args=(konf, stan), daemon=True).start()
+        return jsonify({"zapisane": len(zapisane), "pominiete": pominiete,
+                        "zmienione_nazwy": zmienione})
+
+
+    @app.post("/api/przetwarzaj")
+    def api_przetwarzaj():
+        """Ręczne uruchomienie przetwarzania kolejki (przycisk w panelu)."""
+        con = baza.polacz(konf.sciezka_bazy)
+        try:
+            czeka = con.execute(
+                "SELECT 1 FROM faktury WHERE status = 'do_przetworzenia' LIMIT 1"
+            ).fetchone()
+        finally:
+            baza.zamknij(con)
+        if not czeka:
+            return jsonify({"blad": "kolejka jest pusta"}), 409
+        if not konf.gemini_api_key:
+            return jsonify({"blad": "brak klucza GEMINI_API_KEY na serwerze"}), 503
+        if not stan.przetwarzanie.is_set():
+            threading.Thread(target=_batch_w_tle, args=(konf, stan), daemon=True).start()
+        return jsonify({"ok": True})
+
+
+    @app.get("/api/przetwarzanie")
+    def api_przetwarzanie():
+        return jsonify({"aktywny": stan.przetwarzanie.is_set()})
+
+
+    @app.get("/pdf/<plik>")
+    def pdf(plik: str):
+        # serwujemy wyłącznie pliki przypisane do faktur w bazie:
+        con = baza.polacz(konf.sciezka_bazy)
+        try:
+            istnieje = con.execute(
+                "SELECT 1 FROM faktury WHERE plik = ?", (plik,)).fetchone()
+        finally:
+            baza.zamknij(con)
+        if not istnieje:
+            return jsonify({"blad": "nie ma takiego pliku w bazie"}), 404
+        return send_from_directory(os.path.abspath(konf.katalog_danych), plik)
+
+
+    def _kto_zatwierdza() -> str:
+        """Login do zapisu przy zatwierdzeniu: sesja, token monitora albo tryb dev."""
+        if not konf.auth_wlaczona:
+            return "tryb-deweloperski"
+        if session.get("zalogowany"):
+            return session.get("login") or "nieznany"
+        return "token-monitora"   # inaczej pilnuj_dostepu by nie przepuścił
+
+
+    _NAZWY_STATUSOW = {
+        "do_przetworzenia": "czeka na odczyt",
+        "do_weryfikacji": "ma błędy do weryfikacji",
+        "zatwierdzone": "jest już zatwierdzona",
+        "wyeksportowane": "została już wyeksportowana",
+    }
+
+
+    @app.post("/api/faktury/<int:faktura_id>/zatwierdz")
+    def api_zatwierdz(faktura_id: int):
+        con = baza.polacz(konf.sciezka_bazy)
+        try:
+            f = baza.pobierz_szczegoly(con, faktura_id)
+            if f is None:
+                return jsonify({"blad": "nie ma takiej faktury"}), 404
+            if f["status"] != "do_zatwierdzenia":
+                return jsonify({"blad": "tej faktury nie można zatwierdzić — "
+                                f"{_NAZWY_STATUSOW.get(f['status'], f['status'])}"
+                                }), 409
+            if f["bledy"]:
+                return jsonify({"blad": "faktura ma błędy walidacji — "
+                                         "nie może zostać zatwierdzona"}), 409
+            if not baza.zatwierdz_fakture(con, faktura_id, _kto_zatwierdza()):
+                # status zmienił się między sprawdzeniem a zapisem:
+                return jsonify({"blad": "status faktury zmienił się w międzyczasie "
+                                         "— odśwież listę"}), 409
+        finally:
+            baza.zamknij(con)
+        return jsonify({"ok": True})
+
+
+    @app.post("/api/eksport")
+    def api_eksport():
+        # drugi równoczesny eksport nie czeka, tylko dostaje 409 — inaczej
+        # księgowa klikająca dwa razy dostałaby dwa pliki:
+        if not stan.zamek_eksportu.acquire(blocking=False):
+            return jsonify({"blad": "eksport już trwa — poczekaj na jego "
+                                    "zakończenie"}), 409
+        try:
+            con = baza.polacz(konf.sciezka_bazy)
+            try:
+                n, plik_xml, pdfy = eksport.eksportuj_zatwierdzone(
+                    con, konf.katalog_danych, konf.katalog_eksportu)
+            finally:
+                baza.zamknij(con)
+        finally:
+            stan.zamek_eksportu.release()
+        if n == 0:
+            return jsonify({"blad": "brak zatwierdzonych faktur do eksportu"}), 409
+        return jsonify({"liczba": n, "pdfy": pdfy,
+                        "folder": konf.katalog_eksportu,
+                        "plik": os.path.basename(plik_xml)})
+
+
+    @app.get("/eksport")
+    def pobierz_eksport():
+        # każdy eksport to nowy plik (eksport.xml, eksport_1.xml...) — pobieramy
+        # najnowszy, czyli o największej dacie modyfikacji:
+        pliki = sorted(
+            glob.glob(os.path.join(konf.katalog_eksportu, "eksport*.xml")),
+            key=os.path.getmtime)
+        if not pliki:
+            return jsonify({"blad": "plik eksportu jeszcze nie powstał"}), 404
+        return send_file(pliki[-1], as_attachment=True)
+
+
+    return app
 
 
 # --- start ----------------------------------------------------------------
 
 
-def przygotuj_dane() -> int:
+def przygotuj_dane(konf: konfiguracja.Konfiguracja) -> int:
     """Przetwarza kolejkę 'do_przetworzenia' (wznowienie po restarcie).
 
     Wydzielone z main(), żeby launcher desktopowy (desktop.py) mógł
     wykonać ten sam krok bez kopiowania kodu. Zwraca liczbę prób.
     """
-    klucz = os.environ.get("GEMINI_API_KEY")
-    if not klucz:
+    if not konf.gemini_api_key:
         print("Brak GEMINI_API_KEY — kolejka 'do przetworzenia' czeka.")
         return 0
-    klient = genai.Client(api_key=klucz)
+    klient = genai.Client(api_key=konf.gemini_api_key)
 
-    con = baza.polacz()
+    con = baza.polacz(konf.sciezka_bazy)
     try:
-        n = weryfikator.przetworz_kolejke(klient, con)
+        n = weryfikator.przetworz_kolejke(klient, con, konf.katalog_danych)
         aktywne, z_bledem = con.execute(
             "SELECT COUNT(*), SUM(bledy != '[]') FROM faktury "
             "WHERE status NOT IN ('wyeksportowane', 'do_przetworzenia')"
@@ -404,23 +477,31 @@ def przygotuj_dane() -> int:
 
 
 def main():
+    # .env tylko tutaj (punkt wejścia) — import modułu niczego nie wczytuje:
+    load_dotenv()
+    konf = konfiguracja.z_srodowiska()
+    try:
+        app = utworz_app(konf)
+    except ValueError as e:
+        raise SystemExit(str(e))
+    stan = app.extensions["omega"]
     # batch startowy pod tym samym zamkiem co wątek wgrywania — nowy
     # upload w trakcie startu nie przetworzy niczego dwa razy:
-    with _ZAMEK:
-        _PRZETWARZANIE.set()
+    with stan.zamek_batcha:
+        stan.przetwarzanie.set()
         try:
-            przygotuj_dane()
+            przygotuj_dane(konf)
         finally:
-            _PRZETWARZANIE.clear()
-    url = f"http://{HOST}:{PORT}"
-    if os.environ.get("BEZ_PRZEGLADARKI") == "1":
+            stan.przetwarzanie.clear()
+    url = f"http://{konf.host}:{konf.port}"
+    if konf.bez_przegladarki:
         # kontener/VPS: przeglądarki tam nie ma, URL otwiera użytkownik
         # (albo nakładka desktopowa na swoim komputerze):
         print(f"Panel: {url}")
     else:
         print(f"Panel: {url}  (Ctrl+C kończy)")
         webbrowser.open(url)
-    app.run(host=HOST, port=PORT)
+    app.run(host=konf.host, port=konf.port)
 
 
 if __name__ == "__main__":

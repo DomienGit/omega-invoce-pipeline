@@ -33,7 +33,9 @@ Chwilowe błędy API (429/500/503) są ponawiane w trakcie próby (MAX_PROB
 
 Uruchomienie:  python weryfikator.py   (przetwarza kolejkę z bazy)
 Zależności:    google-genai, pymupdf, python-dotenv
-Klucz API:     GEMINI_API_KEY w pliku .env
+Klucz API:     GEMINI_API_KEY w pliku .env (wczytywany w main(), nie przy
+               imporcie); katalog danych z konfiguracja.py, w funkcjach
+               przekazywany jawnie
 """
 
 import json
@@ -48,6 +50,7 @@ from google import genai
 from google.genai import types
 
 import baza
+import konfiguracja
 
 MODEL = "gemini-3.5-flash-lite"
 DPI = 150                   # rozdzielczość renderowania PDF -> PNG
@@ -195,14 +198,15 @@ def waliduj(f: dict) -> list[str]:
     return bledy
 
 
-def porownaj_z_ground_truth(wyniki: list[dict]) -> dict | None:
-    """Porównuje dane z bazy z data/ground_truth.json.
+def porownaj_z_ground_truth(wyniki: list[dict],
+                            katalog_danych: str) -> dict | None:
+    """Porównuje dane z bazy z <katalog_danych>/ground_truth.json.
 
     wyniki = lista z baza.pobierz_faktury() (klucze jak kolumny tabeli).
     Zwraca {"trafnosc_danych_procent": ..., "trafnosc_klasyfikacji_procent": ...}
     lub None, gdy plik ground truth nie istnieje.
     """
-    sciezka_gt = os.path.join("data", "ground_truth.json")
+    sciezka_gt = os.path.join(katalog_danych, "ground_truth.json")
     if not os.path.exists(sciezka_gt):
         return None
     with open(sciezka_gt, encoding="utf-8") as plik:
@@ -243,7 +247,7 @@ def porownaj_z_ground_truth(wyniki: list[dict]) -> dict | None:
     }
 
 
-def przetworz_kolejke(klient, con) -> int:
+def przetworz_kolejke(klient, con, katalog_danych: str) -> int:
     """Przetwarza faktury o statusie 'do_przetworzenia'.
 
     Współdzielone z panelem (batch w tle po wgraniu plików). Zwraca
@@ -255,7 +259,7 @@ def przetworz_kolejke(klient, con) -> int:
     for f in kolejka:
         print(f"{f['plik']}: odczyt...", flush=True)
         try:
-            png = renderuj_pdf_do_png(os.path.join("data", f["plik"]))
+            png = renderuj_pdf_do_png(os.path.join(katalog_danych, f["plik"]))
             dane = wyodrebnij_dane(klient, png)
             bledy = waliduj(dane)
         except Exception as e:
@@ -280,19 +284,19 @@ def przetworz_kolejke(klient, con) -> int:
 
 def main():
     load_dotenv()
-    klucz = os.environ.get("GEMINI_API_KEY")
-    if not klucz:
+    konf = konfiguracja.z_srodowiska()
+    if not konf.gemini_api_key:
         sys.exit("Błąd: brak GEMINI_API_KEY w pliku .env")
 
-    klient = genai.Client(api_key=klucz)
-    con = baza.polacz()
+    klient = genai.Client(api_key=konf.gemini_api_key)
+    con = baza.polacz(konf.sciezka_bazy)
 
     kolejka = baza.pobierz_kolejke(con)
     if not kolejka:
         print("Kolejka pusta — brak faktur do przetworzenia.\n")
     else:
         print(f"Weryfikacja {len(kolejka)} faktur (model: {MODEL})\n")
-        przetworz_kolejke(klient, con)
+        przetworz_kolejke(klient, con, konf.katalog_danych)
 
     # --- raporty czytamy z bazy (pełny stan, także historia) ------------------
     # Wierszy czekających dalej w 'do_przetworzenia' (nieudane próby)
@@ -302,9 +306,9 @@ def main():
     wyniki = [w for w in wszystkie if w["status"] != "do_przetworzenia"]
 
     # --- porównanie z ground truth ---------------------------------------------
-    raport = porownaj_z_ground_truth(wyniki)
+    raport = porownaj_z_ground_truth(wyniki, konf.katalog_danych)
     if raport:
-        sciezka_raport = os.path.join("data", "raport_dokladnosci.json")
+        sciezka_raport = os.path.join(konf.katalog_danych, "raport_dokladnosci.json")
         with open(sciezka_raport, "w", encoding="utf-8") as plik:
             json.dump(raport, plik, ensure_ascii=False, indent=2)
         print(f"Trafność danych (vs ground truth): {raport['trafnosc_danych_procent']}%")
@@ -327,7 +331,7 @@ def main():
     for w in zle:
         print(f"  {w['plik']}: {'; '.join(w['bledy'])}")
     print(f"Suma netto wszystkich faktur: {suma_netto:.2f} zł")
-    print(f"Baza faktur: {baza.SCIEZKA_BAZY}")
+    print(f"Baza faktur: {konf.sciezka_bazy}")
 
     baza.zamknij(con)
 

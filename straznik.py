@@ -16,7 +16,8 @@ Uruchamiany raz dziennie (cron na serwerze o 20:00 wywołuje
 
 Raport zapisuje też do logi/straznik_RRRR-MM-DD.txt.
 
-Uruchomienie:  python straznik.py
+Uruchomienie:  python straznik.py   (load_dotenv() tylko tutaj, w main —
+import modułu nie czyta .env; ścieżki z konfiguracja.py)
 Zmienne środowiskowe (opcjonalne):
   HEALTHCHECKS_STRAZNIK_URL  adres pingu checki z healthchecks.io;
                              puste = tryb lokalny (raport tylko na ekran)
@@ -26,10 +27,11 @@ import os
 import urllib.request
 from datetime import date, datetime, timedelta
 
-import baza
+from dotenv import load_dotenv
 
-URL_HEALTHCHECKS = os.environ.get("HEALTHCHECKS_STRAZNIK_URL", "")
-FOLDER_LOGOW = "logi"
+import baza
+import konfiguracja
+
 PROG_WIEKU_KOLEJKI = timedelta(hours=4)
 SPADEK_SKUTECZNOSCI = 15     # punkty procentowe vs dotychczasowa średnia
 MIN_FAKTUR_W_OKNIE = 10      # mniejsze okno 7-dniowe nic jeszcze nie mówi
@@ -148,7 +150,10 @@ def ping(url: str, tresc: str) -> None:
 
 
 def main() -> None:
-    con = baza.polacz()
+    load_dotenv()
+    konf = konfiguracja.z_srodowiska()
+    url_healthchecks = os.environ.get("HEALTHCHECKS_STRAZNIK_URL", "")
+    con = baza.polacz(konf.sciezka_bazy)
     try:
         stan = stan_dnia(con)
         alerty = [a for a in (alert_kolejka_stoi(con),
@@ -170,15 +175,15 @@ def main() -> None:
     print(raport)
 
     # raport jako plik — "czy mail/raport powstał" widać na dysku:
-    os.makedirs(FOLDER_LOGOW, exist_ok=True)
-    with open(os.path.join(FOLDER_LOGOW, f"straznik_{dzisiaj}.txt"), "w",
+    os.makedirs(konf.katalog_logow, exist_ok=True)
+    with open(os.path.join(konf.katalog_logow, f"straznik_{dzisiaj}.txt"), "w",
               encoding="utf-8") as plik:
         plik.write(raport + "\n")
 
-    if URL_HEALTHCHECKS:
+    if url_healthchecks:
         # aktywny alarm = /fail (natychmiastowy mail), spokojny dzień =
         # zwykły ping (potwierdzenie, że strażnik przebiegł do 20:30):
-        url = URL_HEALTHCHECKS.rstrip("/") + ("/fail" if alerty else "")
+        url = url_healthchecks.rstrip("/") + ("/fail" if alerty else "")
         ping(url, raport)
         print(f"ping do Healthchecks: {'/fail (alert!)' if alerty else 'ok'}")
 

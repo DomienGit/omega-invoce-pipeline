@@ -74,12 +74,18 @@ stateDiagram-v2
   „razem netto" faktury.
 - **Daty** — termin płatności nie jest wcześniejszy niż data
   wystawienia.
-- **Duplikaty** — ten sam numer faktury nie może wystąpić dwukrotnie
-  wśród bieżących faktur ani powtórzyć faktury już wyeksportowanej
-  wcześniej. Duplikat jest zawsze widocznym błędem do decyzji księgowej,
+- **Duplikaty** — ta sama para (numer faktury, NIP sprzedawcy) nie może
+  wystąpić dwukrotnie wśród bieżących faktur ani powtórzyć faktury już
+  wyeksportowanej wcześniej; ten sam numer u innego sprzedawcy to nie
+  duplikat. Faktury bez NIP-u porównywane są po samym numerze. Duplikat jest zawsze widocznym błędem do decyzji księgowej,
   nigdy cichym nadpisaniem.
 - **Powtórne wgranie** — identyczna treść pliku (odcisk SHA-256) nie
-  jest przetwarzana (i rozliczana w API) drugi raz.
+  jest przetwarzana (i rozliczana w API) drugi raz. Inny plik o tej
+  samej nazwie niczego nie nadpisuje — dostaje wolną nazwę
+  (`faktura_1.pdf`), a panel informuje o zmianie.
+- **Kto zatwierdził** — przy zatwierdzeniu zapisywany jest login i czas;
+  trafiają one do atrybutów `zatwierdzil` i `dataZatwierdzenia` w
+  eksporcie. Zatwierdzić można tylko fakturę „do zatwierdzenia".
 
 ## Skuteczność odczytu
 
@@ -125,6 +131,7 @@ flowchart LR
 | --- | --- | --- |
 | Panel | `panel.py` | serwer webowy: logowanie, wgrywanie PDF-ów, podgląd danych obok oryginału, zatwierdzanie, eksport; przetwarzanie kolejki w tle |
 | Silnik przetwarzania | `weryfikator.py` | renderowanie PDF do obrazu, zapytanie do Gemini z sztywnym schematem JSON, reguły walidacji, raporty |
+| Konfiguracja | `konfiguracja.py` | jedna klasa `Konfiguracja` (ścieżki, klucze, konta, tryb proxy) budowana ze zmiennych środowiskowych i przekazywana jawnie — moduły nie zależą od katalogu roboczego, a testy podają własne katalogi |
 | Baza danych | `baza.py` | SQLite — schemat, migracje, kolejka przetwarzania, statusy, wykrywanie duplikatów |
 | Eksport | `eksport.py` | XML w formacie OmegaProcessor + kopie PDF-ów o nazwach `data_numer_kontrahent.pdf` |
 | Monitor | `monitor.py` | sonda życia co 15 minut (panel i front) + ping do Healthchecks.io |
@@ -162,7 +169,10 @@ flowchart LR
 - **Konta.** Logowanie na login i hasło; w konfiguracji trzymany jest
   wyłącznie hash hasła (scrypt), nigdy jawne hasło. Pięć błędnych prób
   logowania z jednego adresu IP blokuje dostęp na 15 minut. Sesja
-  wygasa po 8 godzinach, ciasteczko jest HttpOnly i SameSite=Lax.
+  wygasa po 8 godzinach, ciasteczko jest HttpOnly, SameSite=Lax i (za
+  HTTPS) Secure. Każda odpowiedź ma nagłówki bezpieczeństwa
+  (Content-Security-Policy, X-Frame-Options, nosniff, HSTS), a dane z
+  faktur są w panelu escapowane — spreparowany PDF nie uruchomi skryptu.
 - **Jedna brama dla wszystkiego.** Strony, API, podgląd PDF-ów i plik
   eksportu przechodzą przez ten sam mechanizm autoryzacji — osoba
   wylogowana nie dobierze się do danych nawet bezpośrednim zapytaniem
@@ -292,31 +302,78 @@ działają, ale nie wysyłają nic na zewnątrz.
 ### Wdrażanie nowych wersji
 
 Repozytorium ma gotowy workflow GitHub Actions (`.github/workflows/
-deploy.yml`): każdy push do gałęzi `main` loguje się przez SSH na
-serwer, pobiera nowy kod, przebudowuje obrazy i restartuje usługi.
-Wymaga sekretów `SSH_PRIVATE_KEY`, `VPS_HOST` i `VPS_USER` w ustawieniach
-repozytorium.
+deploy.yml`). Każdy push (na dowolną gałąź) i każdy pull request
+uruchamia testy (`uv run pytest`) oraz budowę obrazu panelu z krótkim
+startem kontenera i sprawdzeniem `/healthz`. Dopiero push na `main`
+(albo ręczne uruchomienie na `main`) po zielonych testach loguje się
+przez SSH na serwer, pobiera nowy kod, przebudowuje obrazy i restartuje
+usługi; na końcu workflow sprawdza `/healthz` przez HTTPS. Obrazu Caddy
+workflow nie buduje.
+
+Ustawienia w repozytorium (Settings → Secrets and variables → Actions):
+
+- sekrety `SSH_PRIVATE_KEY`, `VPS_HOST`, `VPS_USER`,
+- sekret **`VPS_HOST_KEY`** — gotowa linia `known_hosts` serwera
+  (`host typ-klucza klucz`). Zastępuje `ssh-keyscan`, który ufał każdemu,
+  kto odpowiedział; bez tego sekretu deploy kończy się błędem,
+- zmienna (Variables, nie Secrets) **`PANEL_URL`** — opcjonalna, np.
+  `https://domena:8443`; gdy ustawiona, po deployu workflow woła
+  `${PANEL_URL}/healthz` (kilka prób co 10 s), gdy nie — pomija ten krok.
+
+**Klucz hosta (`VPS_HOST_KEY`).** Na własnym komputerze, który już łączył
+się z serwerem, `ssh-keygen -F <host>` pokazuje zaufaną linię z
+`known_hosts`. Jeśli jest zahaszowana (zaczyna się od `|1|`), zbuduj ją
+ręcznie: na serwerze `cat /etc/ssh/ssh_host_ed25519_key.pub` i wklej do
+sekretu `<host> ssh-ed25519 <klucz>` (sam klucz, bez komentarza na końcu).
+Przy niestandardowym porcie SSH host zapisuje się jako `[host]:port`.
 
 ## Uruchomienie lokalne (bez serwera)
 
 Instalacja zależności: `uv sync` (albo `pip install .`). Python 3.12.
+`uv sync` instaluje też `pytest` (grupa deweloperska; obraz Dockera go nie
+zawiera). Nakładka desktopowa ma osobną grupę: `uv sync --extra desktop`.
 
 - `python panel.py` — panel w przeglądarce pod `http://127.0.0.1:5000`.
   Przy pustym `PANEL_KONTA` logowanie jest wyłączone; przy braku
   `GEMINI_API_KEY` panel działa, ale wgrane faktury czekają w kolejce.
-- `python desktop.py` — panel w natywnym oknie (wymaga doinstalowania
-  `pywebview`, celowo poza zależnościami projektu).
+- `python desktop.py` — panel w natywnym oknie (wymaga biblioteki
+  okienkowej z opcjonalnej grupy `desktop`, celowo poza zależnościami głównymi).
 - `python weryfikator.py` — jednorazowy przebieg batcha w konsoli:
   przetwarza kolejkę, wypisuje raport i porównanie z danymi wzorcowymi.
 - `python generator.py` — tworzy 20 fikcyjnych faktur testowych
   (wymaga doinstalowania `reportlab` i `pillow`, również celowo poza
   zależnościami).
 
+Domyślnie program pracuje na katalogach `data/`, `przetworzone/` i `logi/`
+względem katalogu roboczego (tak jest w Dockerze). Opcjonalne zmienne
+`OMEGA_KATALOG_DANYCH`, `OMEGA_KATALOG_EKSPORTU` i `OMEGA_KATALOG_LOGOW`
+pozwalają je przenieść; plik `.env` jest wczytywany tylko przy
+uruchomieniu programów (nie przy imporcie modułów).
+
+## Testy
+
+```
+uv run pytest
+```
+
+Testy (katalog `tests/`) pracują na tymczasowej bazie i katalogach z
+`tmp_path` i **nigdy nie wołają Gemini ani innych usług zewnętrznych** —
+odczyt AI jest w nich podstawiany gotowymi danymi. Obejmują: reguły
+walidacji, bazę (kolejka, kolizje nazw plików, duplikaty po numerze i
+NIP-ie, zatwierdzanie tylko w statusie „do zatwierdzenia”, zapis osoby
+zatwierdzającej), migrację starej bazy, eksport (atomowość, numerowanie
+plików, kopie PDF), panel przez `test_client` Flaska (logowanie,
+limit prób, token monitora, wgrywanie, API, nagłówki bezpieczeństwa,
+ciasteczko `Secure`) oraz konfigurację. Te same testy uruchamia GitHub
+Actions przed każdym deployem.
+
 ## Struktura repozytorium
 
 | Ścieżka | Zawartość |
 | --- | --- |
 | `panel.py`, `weryfikator.py`, `baza.py`, `eksport.py` | aplikacja właściwa (panel, silnik AI, baza, eksport) |
+| `konfiguracja.py` | konfiguracja (ścieżki, klucze, konta) budowana ze zmiennych środowiskowych |
+| `tests/` | testy automatyczne (pytest) |
 | `monitor.py`, `straznik.py` | monitoring: sonda życia i raport dzienny z alertami |
 | `desktop.py`, `generator.py` | narzędzia lokalne: nakładka okienkowa, generator faktur testowych |
 | `templates/` | interfejs panelu i strona logowania (HTML/CSS/JS) |

@@ -8,7 +8,8 @@ AKTUALIZUJE je w miejscu (zapisz_wynik_ekstrakcji).
   faktury  — nagłówki: numer, strony (nazwy + NIP-y), daty, kwoty
              netto/VAT/brutto, błędy walidacji (JSON), status workflow,
              nazwa pliku PDF (plik) + odcisk treści (SHA-256 — wykrywa
-             ponowne wgranie tej samej faktury) oraz blad_przetworzenia
+             ponowne wgranie tej samej faktury), zatwierdzil +
+             zatwierdzone_at (kto i kiedy zatwierdził) oraz blad_przetworzenia
              (niepusty = ostatnia próba nieudana: zepsuty PDF / API;
              wiersz zostaje w 'do_przetworzenia' i czeka na ponowienie).
   pozycje  — wiersze tabeli faktury: nazwa, ilosc, cena_netto,
@@ -17,21 +18,25 @@ AKTUALIZUJE je w miejscu (zapisz_wynik_ekstrakcji).
 
 Statusy: do_przetworzenia (czeka na ekstrakcję) / do_weryfikacji /
 do_zatwierdzenia / zatwierdzone / wyeksportowane. Wyeksportowane to
-HISTORIA: znikają z panelu i nie są nadpisywane. Zatwierdzone (ludzka
-akceptacja) jest chronione — wgranie pliku pod zajętą nazwą nie podmieni
-zatwierdzonej faktury. Powtórka numeru + NIP względem historii dostaje
-błąd "duplikat faktury wcześniej wyeksportowanej"; powtórka numeru wśród
-aktywnych — błąd "duplikat numeru faktury" (oznacz_duplikaty) — oba do
-decyzji księgowej, bo duplikat musi być WIDOCZNY, a nie cicho zastąpiony.
+HISTORIA: znikają z panelu i nie są nadpisywane. Zatwierdzić można
+tylko fakturę 'do_zatwierdzenia' (warunek w samym UPDATE). Wgranie PDF-a
+nigdy niczego nie usuwa ani nie nadpisuje: gdy nazwa pliku jest zajęta
+(wiersz w bazie w dowolnym statusie albo plik w data/), nowa faktura
+dostaje wolną nazwę z dopiskiem (faktura_1.pdf). Powtórka numeru + NIP
+sprzedawcy względem historii dostaje błąd "duplikat faktury wcześniej
+wyeksportowanej"; powtórka tej samej pary wśród aktywnych — błąd
+"duplikat numeru faktury" (oznacz_duplikaty) — oba do decyzji księgowej,
+bo duplikat musi być WIDOCZNY, a nie cicho zastąpiony.
 
 Migracje w polacz(): stare schematy (tabelowy UNIQUE, CHECK bez
 'do_przetworzenia', brak kolumn odcisk_pliku/blad_przetworzenia) są
-przebudowywane; nazwa pliku jest unikalna wśród aktywnych (indeks
-częściowy), numery mogą się powtarzać (patrz wyżej).
+przebudowywane, a brakujące kolumny zatwierdzil/zatwierdzone_at
+dodawane przez ALTER TABLE; nazwa pliku jest unikalna wśród aktywnych
+(indeks częściowy), numery mogą się powtarzać (patrz wyżej).
 
 Użycie z weryfikatora / panelu:
-  con = baza.polacz()
-  baza.dodaj_do_kolejki(con, plik, odcisk)   # przy wgraniu PDF-a
+  con = baza.polacz(konf.sciezka_bazy)      # ścieżka zawsze jawna
+  nazwa, powod = baza.dodaj_do_kolejki(con, plik, odcisk, konf.katalog_danych, zapisz)
   for f in baza.pobierz_kolejke(con): ...    # agent: ekstrakcja
   baza.zapisz_wynik_ekstrakcji(con, id, dane, bledy)
   faktury = baza.pobierz_faktury(con)        # lista do panelu
@@ -40,11 +45,10 @@ Użycie z weryfikatora / panelu:
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from datetime import datetime
-
-SCIEZKA_BAZY = "data/faktury.db"
 
 STATUSY = ("'do_przetworzenia', 'do_weryfikacji', 'do_zatwierdzenia', "
            "'zatwierdzone', 'wyeksportowane'")
@@ -68,7 +72,9 @@ CREATE TABLE IF NOT EXISTS faktury (
     vat               REAL,
     brutto            REAL,
     bledy             TEXT NOT NULL DEFAULT '[]',
-    status            TEXT NOT NULL CHECK (status IN ({STATUSY}))
+    status            TEXT NOT NULL CHECK (status IN ({STATUSY})),
+    zatwierdzil       TEXT,     -- login osoby, która zatwierdziła fakturę
+    zatwierdzone_at   TEXT      -- kiedy (ISO, do sekundy)
 );
 """
 
@@ -101,7 +107,12 @@ KOLUMNY_MIGRACJI = (
     "przetworzone_at", "numer", "nazwa_sprzedawcy", "nip_sprzedawcy",
     "nazwa_nabywcy", "nip_nabywcy", "data_wystawienia", "termin_platnosci",
     "netto", "vat", "brutto", "bledy", "status",
+    "zatwierdzil", "zatwierdzone_at",
 )
+
+# kolumny dodane później — stara baza dostaje je przez ALTER TABLE
+# (bez przebudowy tabeli i bez utraty danych):
+KOLUMNY_DODAWANE = ("zatwierdzil", "zatwierdzone_at")
 
 
 def normalizuj_nip(nip: str | None) -> str | None:
@@ -192,12 +203,21 @@ def _migruj_schemat(con: sqlite3.Connection) -> None:
         con.execute("PRAGMA foreign_keys = ON")
 
 
-def polacz(sciezka: str = SCIEZKA_BAZY) -> sqlite3.Connection:
-    """Otwiera bazę, tworzy tabele i migruje stare schematy."""
+def polacz(sciezka: str) -> sqlite3.Connection:
+    """Otwiera bazę pod jawną ścieżką, tworzy tabele i migruje stare schematy.
+
+    Ścieżkę podaje wywołujący (Konfiguracja.sciezka_bazy) — moduł nie
+    zakłada katalogu roboczego.
+    """
     con = sqlite3.connect(sciezka)
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(DDL)
     _migruj_schemat(con)
+    istniejace = {w[1] for w in con.execute("PRAGMA table_info(faktury)")}
+    for kolumna in KOLUMNY_DODAWANE:
+        if kolumna not in istniejace:
+            con.execute(f"ALTER TABLE faktury ADD COLUMN {kolumna} TEXT")
+    con.commit()
     # pozostałości starych schematów — zastąpione częściowym uq_aktywny_plik:
     con.execute("DROP INDEX IF EXISTS uq_faktury_plik")
     con.execute("DROP INDEX IF EXISTS uq_aktywny_numer")
@@ -209,35 +229,53 @@ def zamknij(con: sqlite3.Connection) -> None:
     con.close()
 
 
-def zatwierdz_fakture(con: sqlite3.Connection, faktura_id: int) -> bool:
+def zatwierdz_fakture(con: sqlite3.Connection, faktura_id: int,
+                      login: str) -> bool:
     """Ustawia status 'zatwierdzone' fakturze i jej pozycjom.
 
-    Zwraca False, gdy faktura nie istnieje. Decyzja o dopuszczalności
-    zatwierdzenia (np. faktura bez błędów) należy do wywołującego.
+    Zatwierdzić można TYLKO fakturę 'do_zatwierdzenia' bez błędów —
+    warunek siedzi w samym UPDATE, więc jest odporny na wyścig między
+    sprawdzeniem w endpoincie a zapisem (np. faktura wyeksportowana
+    w międzyczasie nie wróci do eksportu). Zapisuje, kto (login)
+    i kiedy zatwierdził. Zwraca False, gdy nic się nie zmieniło
+    (brak faktury albo inny status) — pozycje wtedy też zostają.
     """
     with con:
         cur = con.execute(
-            "UPDATE faktury SET status = 'zatwierdzone' WHERE id = ?",
-            (faktura_id,),
+            "UPDATE faktury SET status = 'zatwierdzone', zatwierdzil = ?, "
+            "zatwierdzone_at = ? "
+            "WHERE id = ? AND status = 'do_zatwierdzenia' AND bledy = '[]'",
+            (login, datetime.now().isoformat(timespec="seconds"),
+             faktura_id),
         )
-        con.execute(
-            "UPDATE pozycje SET status = 'zatwierdzone' WHERE faktura_id = ?",
-            (faktura_id,),
-        )
+        if cur.rowcount:
+            con.execute(
+                "UPDATE pozycje SET status = 'zatwierdzone' "
+                "WHERE faktura_id = ?", (faktura_id,))
     return cur.rowcount > 0
 
 
-def oznacz_wyeksportowane(con: sqlite3.Connection) -> int:
+def oznacz_wyeksportowane(con: sqlite3.Connection,
+                          ids: list[int] | None = None) -> int:
     """Przenosi faktury 'zatwierdzone' do statusu 'wyeksportowane'.
 
-    Wywoływane po udanym eksporcie — wyeksportowane faktury znikają
-    z panelu i (jak 'zatwierdzone') nie są cofane przez re-run, ale
-    pozostają w bazie jako historia. Zwraca liczbę zmienionych faktur.
+    ids — identyfikatory faktur faktycznie zapisanych w eksporcie:
+    zmieniamy tylko te z nich, które nadal są 'zatwierdzone' (faktura
+    zatwierdzona już PO ustaleniu listy nie trafiła do pliku, więc
+    zostaje do następnego eksportu). ids=None -> wszystkie zatwierdzone.
+    Wyeksportowane znikają z panelu, ale zostają w bazie jako historia.
+    Zwraca liczbę zmienionych faktur.
     """
+    warunek, parametry = "", ()
+    if ids is not None:
+        if not ids:
+            return 0
+        warunek = f" AND id IN ({', '.join('?' * len(ids))})"
+        parametry = tuple(ids)
     with con:
         cur = con.execute(
             "UPDATE faktury SET status = 'wyeksportowane' "
-            "WHERE status = 'zatwierdzone'")
+            "WHERE status = 'zatwierdzone'" + warunek, parametry)
         con.execute(
             "UPDATE pozycje SET status = 'wyeksportowane' "
             "WHERE status != 'wyeksportowane' AND faktura_id IN "
@@ -245,39 +283,68 @@ def oznacz_wyeksportowane(con: sqlite3.Connection) -> int:
     return cur.rowcount
 
 
-def dodaj_do_kolejki(con: sqlite3.Connection, plik: str,
-                     odcisk: str) -> str | None:
+def _wolna_nazwa(con: sqlite3.Connection, plik: str, folder: str) -> str:
+    """Pierwsza nazwa pliku niezajęta ani w bazie, ani na dysku.
+
+    Zajęta = jakikolwiek wiersz faktury (także wyeksportowany — jego PDF
+    to historia) albo plik w folderze. Dopisek: faktura_1.pdf, _2, ...
+    """
+    korzen, rozszerzenie = os.path.splitext(plik)
+    kandydat, numer = plik, 0
+    while (con.execute("SELECT 1 FROM faktury WHERE plik = ?",
+                       (kandydat,)).fetchone()
+           or os.path.exists(os.path.join(folder, kandydat))):
+        numer += 1
+        kandydat = f"{korzen}_{numer}{rozszerzenie}"
+    return kandydat
+
+
+def dodaj_do_kolejki(con: sqlite3.Connection, plik: str, odcisk: str,
+                     folder: str,
+                     zapisz_plik=None) -> tuple[str | None, str | None]:
     """Rejestruje wgrany PDF: wiersz o statusie 'do_przetworzenia'.
 
-    Zwraca None (przyjęto) albo powód pominięcia: treść już znaną
-    ('już przetworzona' / 'już w kolejce') albo kolizję nazwy pliku
-    z fakturą zatwierdzoną (akceptacja człowieka jest chroniona).
-    Aktywny wiersz o tej nazwie z INNĄ treścią jest zastępowany —
-    stary plik właśnie został nadpisany nową fakturą.
+    Zwraca (nazwa, powód): przyjęto -> (nazwa pod jaką zarejestrowano,
+    None); pominięto -> (None, 'już przetworzona' / 'już w kolejce').
+    Identyczna treść (odcisk SHA-256) ma pierwszeństwo przed nazwą.
+    NIC nie jest usuwane ani nadpisywane: zajętą nazwę zastępuje wolna
+    z dopiskiem (patrz _wolna_nazwa), więc faktura i jej PDF z historii
+    są bezpieczne.
+
+    folder — katalog danych z PDF-ami (jawny, np. Konfiguracja.katalog_danych).
+    zapisz_plik(nazwa) — wywołanie zapisujące PDF na dysku; idzie PRZED
+    wstawieniem wiersza, żeby wątek przetwarzania nie znalazł w kolejce
+    wiersza bez pliku. Gdy wstawienie się nie uda, świeżo zapisany plik
+    jest usuwany. Całość pod BEGIN IMMEDIATE — wybór nazwy i wstawienie
+    nie rozjadą się z równoległym wgraniem.
     """
-    with con:
+    con.execute("BEGIN IMMEDIATE")
+    zapisany = None
+    try:
         z_tym_odciskiem = con.execute(
             "SELECT status FROM faktury WHERE odcisk_pliku = ?", (odcisk,)
         ).fetchone()
         if z_tym_odciskiem:
-            return ("już w kolejce"
-                    if z_tym_odciskiem[0] == "do_przetworzenia"
-                    else "już przetworzona")
+            con.rollback()
+            return None, ("już w kolejce"
+                          if z_tym_odciskiem[0] == "do_przetworzenia"
+                          else "już przetworzona")
 
-        wiersz = con.execute(
-            "SELECT id, status FROM faktury "
-            "WHERE plik = ? AND status != 'wyeksportowane'", (plik,)
-        ).fetchone()
-        if wiersz:
-            if wiersz[1] == "zatwierdzone":
-                return "istnieje już zatwierdzona faktura o tej nazwie pliku"
-            con.execute("DELETE FROM faktury WHERE id = ?", (wiersz[0],))
-
+        nazwa = _wolna_nazwa(con, plik, folder)
+        if zapisz_plik is not None:
+            zapisany = os.path.join(folder, nazwa)
+            zapisz_plik(nazwa)
         con.execute(
             "INSERT INTO faktury (plik, odcisk_pliku, wgrane_at, status) "
             "VALUES (?, ?, ?, 'do_przetworzenia')",
-            (plik, odcisk, datetime.now().isoformat(timespec="seconds")))
-    return None
+            (nazwa, odcisk, datetime.now().isoformat(timespec="seconds")))
+        con.commit()
+        return nazwa, None
+    except BaseException:
+        con.rollback()
+        if zapisany and os.path.exists(zapisany):
+            os.remove(zapisany)   # nie zostawiamy pliku bez wiersza
+        raise
 
 
 def pobierz_kolejke(con: sqlite3.Connection) -> list[dict]:
@@ -358,24 +425,29 @@ def oznacz_blad_przetworzenia(con: sqlite3.Connection, faktura_id: int,
 
 
 def oznacz_duplikaty(con: sqlite3.Connection) -> None:
-    """Dopisuje/uczy błędu powtórzonego numeru faktury — wśród aktywnych.
+    """Dopisuje/uczy błędu powtórzonej faktury — wśród aktywnych.
 
-    Pierwsze (alfabetycznie po pliku) wystąpienie numeru zostaje czyste,
-    kolejne dostają błąd "duplikat numeru faktury ...". Błędy duplikatów
-    są przeliczane od zera (zmiana numeru przy re-ekstrakcji usuwa
+    Duplikat = ta sama para (numer, NIP sprzedawcy): numery w rodzaju
+    1/11/2026 są częste, więc ten sam numer u innego sprzedawcy to nie
+    duplikat. Faktury bez NIP-u porównujemy po samym numerze (para
+    z pustym NIP-em) — ostrożnie, w razie wątpliwości księgowa zdecyduje.
+    Pierwsze (alfabetycznie po pliku) wystąpienie zostaje czyste, kolejne
+    dostają błąd "duplikat numeru faktury ...". Błędy duplikatów są
+    przeliczane od zera (zmiana numeru przy re-ekstrakcji usuwa
     przedawniony błąd u pozostałych). Status 'zatwierdzone' chroniony.
     """
     with con:
         widziane = {}
-        for fid, plik, numer, bledy_txt in con.execute(
-                "SELECT id, plik, numer, bledy FROM faktury "
+        for fid, plik, numer, nip, bledy_txt in con.execute(
+                "SELECT id, plik, numer, nip_sprzedawcy, bledy FROM faktury "
                 "WHERE status != 'wyeksportowane' AND numer IS NOT NULL "
                 "AND blad_przetworzenia IS NULL ORDER BY plik"):
+            klucz = (numer, nip)
             bledy = [b for b in json.loads(bledy_txt or "[]")
                      if not b.startswith("duplikat numeru faktury")]
-            if numer in widziane:
+            if klucz in widziane:
                 bledy.append(f"duplikat numeru faktury {numer} "
-                             f"(wcześniejsze wystąpienie: {widziane[numer]})")
+                             f"(wcześniejsze wystąpienie: {widziane[klucz]})")
             if bledy != json.loads(bledy_txt or "[]"):
                 status = "do_weryfikacji" if bledy else "do_zatwierdzenia"
                 wiersz = con.execute(
@@ -391,7 +463,7 @@ def oznacz_duplikaty(con: sqlite3.Connection) -> None:
                     "UPDATE pozycje SET status = ? WHERE faktura_id = ?",
                     (status, fid),
                 )
-            widziane.setdefault(numer, plik)
+            widziane.setdefault(klucz, plik)
 
 
 KOLUMNY_FAKTURY = (
@@ -399,6 +471,7 @@ KOLUMNY_FAKTURY = (
     "przetworzone_at", "numer", "nazwa_sprzedawcy", "nip_sprzedawcy",
     "nazwa_nabywcy", "nip_nabywcy", "data_wystawienia", "termin_platnosci",
     "netto", "vat", "brutto", "bledy", "status",
+    "zatwierdzil", "zatwierdzone_at",
 )
 
 
